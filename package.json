@@ -1,0 +1,62 @@
+{
+  "name": "canvas-writer",
+  "version": "0.1.0",
+  "description": "Local-first canvas writing app with multi-engine editing",
+  "main": "dist/main/main.js",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k \"tsc -w -p tsconfig.main.json\" \"vite\" \"wait-on dist/main/main.js http://localhost:5173 && electron .\"",
+    "build": "vite build && tsc -p tsconfig.main.json",
+    "dist": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder && node scripts/backup-build.js"
+  },
+  "build": {
+    "appId": "com.kavin.canvaswriter",
+    "productName": "Canvas Writer",
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "sign": false,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": null,
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.productivity"
+    },
+    "directories": {
+      "output": "release"
+    }
+  },
+  "author": "kavin",
+  "license": "GPL-3.0-only",
+  "dependencies": {
+    "@codemirror/commands": "^6.10.2",
+    "@codemirror/history": "^0.19.2",
+    "@codemirror/lang-markdown": "^6.5.0",
+    "@codemirror/language": "^6.12.1",
+    "@codemirror/search": "^6.6.0",
+    "@codemirror/state": "^6.5.4",
+    "@codemirror/view": "^6.39.12",
+    "diff": "^8.0.3",
+    "html-to-docx": "^1.8.0",
+    "marked": "^17.0.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.1",
+    "@types/react": "^19.2.13",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.3",
+    "concurrently": "^9.2.1",
+    "electron": "^40.2.1",
+    "electron-builder": "^26.7.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "wait-on": "^9.0.3"
+  }
+}

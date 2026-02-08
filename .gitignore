@@ -1,0 +1,10 @@
+node_modules/
+dist/
+release/
+build_backups/
+.DS_Store
+npm-debug.log*
+
+# editor
+.vscode/
+.idea/
