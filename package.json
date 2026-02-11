@@ -1,6 +1,6 @@
 {
   "name": "canvas-writer",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Local-first canvas writing app with multi-engine editing",
   "main": "dist/main/main.js",
   "private": true,

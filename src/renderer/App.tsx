@@ -522,7 +522,7 @@ export default function App() {
     }
   }
 
-  async function handleRewriteSelection(overrideInstruction?: string) {
+  async function handleRewriteSelection() {
     if (!selectionRange) {
       setStatus(t.selectText);
       return;
@@ -531,7 +531,7 @@ export default function App() {
       setStatus(t.noProvider);
       return;
     }
-    const instructionText = (overrideInstruction ?? selectionInstruction).trim();
+    const instructionText = selectionInstruction.trim();
     if (!instructionText) {
       setStatus(t.rewriteReq);
       return;
@@ -1190,8 +1190,8 @@ export default function App() {
                 onChange={(e) => setSelectionInstruction(e.target.value)}
               />
               <div className="button-row">
-                <button className="btn primary" onClick={handleRewriteSelection} disabled={isBusy}>
-                  {t.apply}
+                <button className="btn primary" onClick={() => handleRewriteSelection()} disabled={isBusy}>
+                  {busyAction === "rewrite" ? `${language === "zh" ? "应用中" : "Applying"}${busyDots}` : t.apply}
                 </button>
               </div>
             </div>
