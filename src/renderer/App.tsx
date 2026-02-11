@@ -17,7 +17,7 @@ const providerPresets = [
   { id: "moonshot", label: "Kimi (Moonshot)", baseUrl: "https://api.moonshot.ai/v1", apiType: "openai", authType: "bearer" },
   { id: "siliconflow-com", label: "硅基流动 (SiliconFlow 国际)", baseUrl: "https://api.siliconflow.com/v1", apiType: "openai", authType: "bearer" },
   { id: "siliconflow-cn", label: "硅基流动 (SiliconFlow 中国)", baseUrl: "https://api.siliconflow.cn/v1", apiType: "openai", authType: "bearer" },
-  { id: "minimax-cn", label: "MiniMax (中国)", baseUrl: "https://api.minimax.chat/v1", apiType: "minimax", authType: "bearer" },
+  { id: "minimax-cn", label: "MiniMax (中国)", baseUrl: "https://api.minimaxi.com/v1", apiType: "minimax", authType: "bearer" },
   { id: "dashscope", label: "阿里云 DashScope 兼容模式", baseUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", apiType: "openai", authType: "bearer" },
   { id: "gemini", label: "Gemini (AI Studio)", baseUrl: "https://generativelanguage.googleapis.com/v1beta", apiType: "gemini", authType: "x-goog-api-key" }
 ];
