@@ -17,6 +17,7 @@ const providerPresets = [
   { id: "moonshot", label: "Kimi (Moonshot)", baseUrl: "https://api.moonshot.ai/v1", apiType: "openai", authType: "bearer" },
   { id: "siliconflow-com", label: "硅基流动 (SiliconFlow 国际)", baseUrl: "https://api.siliconflow.com/v1", apiType: "openai", authType: "bearer" },
   { id: "siliconflow-cn", label: "硅基流动 (SiliconFlow 中国)", baseUrl: "https://api.siliconflow.cn/v1", apiType: "openai", authType: "bearer" },
+  { id: "minimax-cn", label: "MiniMax (中国)", baseUrl: "https://api.minimax.chat/v1", apiType: "minimax", authType: "bearer" },
   { id: "dashscope", label: "阿里云 DashScope 兼容模式", baseUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", apiType: "openai", authType: "bearer" },
   { id: "gemini", label: "Gemini (AI Studio)", baseUrl: "https://generativelanguage.googleapis.com/v1beta", apiType: "gemini", authType: "x-goog-api-key" }
 ];
@@ -80,6 +81,7 @@ const i18n = {
     en: "英文",
     apiType: "API 类型",
     apiOpenAI: "OpenAI 兼容",
+    apiMiniMax: "MiniMax (中国)",
     apiGemini: "Gemini (AI Studio)",
     authGoog: "鉴权方式：x-goog-api-key",
     noPrompt: "请输入生成文章的提示词。",
@@ -109,10 +111,6 @@ const i18n = {
     applyOutline: "插入大纲",
     cardView: "卡片视图",
     editView: "写作视图",
-    quickShorten: "精简",
-    quickExpand: "扩写",
-    quickFormal: "更正式",
-    quickCasual: "更口语",
     suggestTitle: "标题建议",
     suggestOutline: "大纲建议"
     ,
@@ -169,6 +167,7 @@ const i18n = {
     en: "English",
     apiType: "API Type",
     apiOpenAI: "OpenAI Compatible",
+    apiMiniMax: "MiniMax (China)",
     apiGemini: "Gemini (AI Studio)",
     authGoog: "Auth: x-goog-api-key",
     noPrompt: "Enter a prompt to generate an article.",
@@ -198,10 +197,6 @@ const i18n = {
     applyOutline: "Insert Outline",
     cardView: "Cards",
     editView: "Write",
-    quickShorten: "Shorten",
-    quickExpand: "Expand",
-    quickFormal: "Formal",
-    quickCasual: "Casual",
     suggestTitle: "Title Suggestion",
     suggestOutline: "Outline Suggestion"
     ,
@@ -236,6 +231,12 @@ const noopApi: Window["api"] = {
 function nowLabel() {
   const d = new Date();
   return d.toLocaleString();
+}
+
+function compactMessages(messages: { role: "user" | "assistant"; content: string }[]) {
+  const MAX_HISTORY_MESSAGES = 8;
+  if (messages.length <= MAX_HISTORY_MESSAGES) return messages;
+  return messages.slice(-MAX_HISTORY_MESSAGES);
 }
 
 export default function App() {
@@ -382,11 +383,13 @@ export default function App() {
   }, [providerForm.baseUrl, providerForm.apiKey, providerForm.authType, lastModelFetchKey]);
 
   useEffect(() => {
-    if (!selectionText) {
+    if (!selectionRange) {
       setSelectionInstruction("");
-      setSelectionRange(null);
+      editorRef.current?.setPinnedSelection(null);
+      return;
     }
-  }, [selectionText]);
+    editorRef.current?.setPinnedSelection(selectionRange);
+  }, [selectionRange]);
 
   const activeProvider = useMemo(
     () => providers.find((p) => p.id === activeProviderId),
@@ -446,7 +449,7 @@ export default function App() {
       const nextMessages = [...conversation, { role: "user", content: chatInput.trim() }];
       const content = await api.generateArticle({
         providerId: activeProvider.id,
-        messages: nextMessages,
+        messages: compactMessages(nextMessages),
         language
       });
       editorRef.current?.setValue(content);
@@ -489,7 +492,7 @@ export default function App() {
       }
       const content = await api.generateArticle({
         providerId: activeProvider.id,
-        messages: base,
+        messages: compactMessages(base),
         language
       });
       editorRef.current?.setValue(content);
@@ -505,7 +508,7 @@ export default function App() {
   }
 
   async function handleRewriteSelection(overrideInstruction?: string) {
-    if (!selectionRange || selectionText.trim().length === 0) {
+    if (!selectionRange) {
       setStatus(t.selectText);
       return;
     }
@@ -529,10 +532,18 @@ export default function App() {
       setIsBusy(true);
       setStatus(language === "zh" ? "正在改写选中文本..." : "Rewriting selection...");
       const fullText = editorRef.current?.getValue() ?? currentContent;
+      const effectiveSelectionText =
+        selectionText.trim().length > 0
+          ? selectionText
+          : fullText.slice(selectionRange.from, selectionRange.to);
+      if (!effectiveSelectionText.trim()) {
+        setStatus(t.selectText);
+        return;
+      }
       const revised = await api.rewriteSelection({
         providerId: activeProvider.id,
         fullText,
-        selectionText,
+        selectionText: effectiveSelectionText,
         instruction: instructionText,
         language
       });
@@ -661,26 +672,6 @@ export default function App() {
     setConversation([]);
     setCardMode(false);
     setDirty(false);
-  }
-
-  function handleQuickRewrite(type: "shorten" | "expand" | "formal" | "casual") {
-    const map =
-      language === "zh"
-        ? {
-            shorten: "请在不改变含义的情况下精简表述。",
-            expand: "请在不改变含义的情况下扩写细节。",
-            formal: "请改成更正式、学术的表达。",
-            casual: "请改成更口语、更自然的表达。"
-          }
-        : {
-            shorten: "Shorten without changing meaning.",
-            expand: "Expand with more detail without changing meaning.",
-            formal: "Rewrite in a more formal, academic tone.",
-            casual: "Rewrite in a more casual, natural tone."
-          };
-    const instruction = map[type];
-    setSelectionInstruction(instruction);
-    handleRewriteSelection(instruction);
   }
 
   function parseCards(text: string) {
@@ -899,11 +890,12 @@ export default function App() {
                   setProviderForm((p) => ({
                     ...p,
                     apiType: next,
-                    authType: next === "gemini" ? "x-goog-api-key" : p.authType ?? "bearer"
+                    authType: next === "gemini" ? "x-goog-api-key" : "bearer"
                   }));
                 }}
               >
                 <option value="openai">{t.apiOpenAI}</option>
+                <option value="minimax">{t.apiMiniMax}</option>
                 <option value="gemini">{t.apiGemini}</option>
               </select>
               <input
@@ -1106,9 +1098,9 @@ export default function App() {
               initialValue=""
               onChange={setContent}
               onSelectionChange={(text, rect) => {
-                setSelectionText(text);
-                setSelectionRect(rect);
-                if (text.trim().length > 0) {
+                if (text.trim().length > 0 && rect) {
+                  setSelectionText(text);
+                  setSelectionRect(rect);
                   const sel = editorRef.current?.getSelection();
                   if (sel && sel.from !== sel.to) {
                     setSelectionRange({ from: sel.from, to: sel.to });
@@ -1149,7 +1141,7 @@ export default function App() {
             </div>
           )}
 
-          {!cardMode && viewMode === "edit" && selectionText && selectionRect && (
+          {!cardMode && viewMode === "edit" && selectionRange && selectionRect && (
             <div
               className="selection-popover"
               style={{
@@ -1167,21 +1159,6 @@ export default function App() {
               <div className="button-row">
                 <button className="btn primary" onClick={handleRewriteSelection} disabled={isBusy}>
                   {t.apply}
-                </button>
-                <button className="btn" onClick={() => setSelectionInstruction("")}>
-                  {t.clear}
-                </button>
-                <button className="btn" onClick={() => handleQuickRewrite("shorten")}>
-                  {t.quickShorten}
-                </button>
-                <button className="btn" onClick={() => handleQuickRewrite("expand")}>
-                  {t.quickExpand}
-                </button>
-                <button className="btn" onClick={() => handleQuickRewrite("formal")}>
-                  {t.quickFormal}
-                </button>
-                <button className="btn" onClick={() => handleQuickRewrite("casual")}>
-                  {t.quickCasual}
                 </button>
               </div>
             </div>

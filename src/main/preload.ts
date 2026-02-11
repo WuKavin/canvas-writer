@@ -5,6 +5,8 @@ type ProviderConfig = {
   name: string;
   baseUrl: string;
   model: string;
+  apiType?: "openai" | "gemini" | "minimax";
+  authType?: "bearer" | "x-api-key" | "api-key" | "x-goog-api-key";
   apiKey?: string;
 };
 
@@ -28,7 +30,7 @@ contextBridge.exposeInMainWorld("api", {
   saveProvider: (provider: ProviderConfig): Promise<ProviderPublic> => ipcRenderer.invoke("providers:save", provider),
   deleteProvider: (id: string) => ipcRenderer.invoke("providers:delete", id),
 
-  fetchModels: (payload: { baseUrl: string; apiKey: string; authType?: "bearer" | "x-api-key" | "api-key" | "x-goog-api-key"; apiType?: "openai" | "gemini" }) =>
+  fetchModels: (payload: { baseUrl: string; apiKey: string; authType?: "bearer" | "x-api-key" | "api-key" | "x-goog-api-key"; apiType?: "openai" | "gemini" | "minimax" }) =>
     ipcRenderer.invoke("providers:fetchModels", payload),
 
   generateArticle: (payload: { providerId: string; messages: { role: "user" | "assistant"; content: string }[]; language: "zh" | "en" }) =>

@@ -1,6 +1,6 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import { EditorState } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
+import { EditorState, StateEffect, StateField } from "@codemirror/state";
+import { Decoration, DecorationSet, EditorView, keymap } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
 
@@ -10,6 +10,7 @@ export type EditorHandle = {
   getSelection: () => { from: number; to: number; text: string };
   replaceSelection: (text: string) => void;
   replaceRange: (from: number, to: number, text: string) => void;
+  setPinnedSelection: (range: { from: number; to: number } | null) => void;
   getSelectionRect: () => { left: number; top: number; bottom: number } | null;
 };
 
@@ -18,6 +19,30 @@ type EditorProps = {
   onChange: (value: string) => void;
   onSelectionChange: (text: string, rect: { left: number; top: number; bottom: number } | null) => void;
 };
+
+const setPinnedSelectionEffect = StateEffect.define<{ from: number; to: number } | null>();
+
+const pinnedSelectionField = StateField.define<DecorationSet>({
+  create() {
+    return Decoration.none;
+  },
+  update(decorations, tr) {
+    decorations = decorations.map(tr.changes);
+    for (const effect of tr.effects) {
+      if (effect.is(setPinnedSelectionEffect)) {
+        const range = effect.value;
+        if (!range || range.from === range.to) {
+          return Decoration.none;
+        }
+        const from = Math.min(range.from, range.to);
+        const to = Math.max(range.from, range.to);
+        return Decoration.set([Decoration.mark({ class: "cm-pinned-selection" }).range(from, to)]);
+      }
+    }
+    return decorations;
+  },
+  provide: (field) => EditorView.decorations.from(field)
+});
 
 const Editor = forwardRef<EditorHandle, EditorProps>(({ initialValue, onChange, onSelectionChange }, ref) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -39,6 +64,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(({ initialValue, onChange, 
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         EditorView.lineWrapping,
+        pinnedSelectionField,
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             onChangeRef.current(update.state.doc.toString());
@@ -106,6 +132,11 @@ const Editor = forwardRef<EditorHandle, EditorProps>(({ initialValue, onChange, 
       const view = viewRef.current;
       if (!view) return;
       view.dispatch({ changes: { from, to, insert: text } });
+    },
+    setPinnedSelection: (range: { from: number; to: number } | null) => {
+      const view = viewRef.current;
+      if (!view) return;
+      view.dispatch({ effects: setPinnedSelectionEffect.of(range) });
     },
     getSelectionRect: () => {
       const view = viewRef.current;

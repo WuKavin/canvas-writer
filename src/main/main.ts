@@ -7,7 +7,7 @@ type ProviderConfig = {
   name: string;
   baseUrl: string;
   model: string;
-  apiType?: "openai" | "gemini";
+  apiType?: "openai" | "gemini" | "minimax";
   authType?: "bearer" | "x-api-key" | "api-key" | "x-goog-api-key";
   apiKey?: string;
 };
@@ -115,6 +115,72 @@ async function ensureBackupDir() {
 
 function safeFilePart(input: string) {
   return input.replace(/[^a-zA-Z0-9-_]/g, "_").slice(0, 80);
+}
+
+async function requestMiniMax(
+  provider: ProviderConfig,
+  payload: {
+    userText: string;
+    systemText?: string;
+    temperature?: number;
+    messages?: { role: "user" | "assistant"; content: string }[];
+  }
+) {
+  const baseUrl = normalizeBaseUrl(provider.baseUrl);
+  const url = `${baseUrl}/text/chatcompletion_v2`;
+  const body: any = {
+    model: provider.model,
+    stream: false,
+    temperature: payload.temperature ?? 0.7
+  };
+
+  if (payload.systemText) {
+    body.bot_setting = [{ bot_name: "Assistant", content: payload.systemText }];
+  }
+
+  if (payload.messages && payload.messages.length > 0) {
+    body.messages = payload.messages.map((m) => ({
+      sender_type: m.role === "assistant" ? "BOT" : "USER",
+      text: m.content
+    }));
+  } else {
+    body.messages = [{ sender_type: "USER", text: payload.userText }];
+  }
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...buildAuthHeaders(provider.authType ?? "bearer", provider.apiKey || "")
+    },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Model request failed: ${res.status} ${text}`);
+  }
+  const data = await res.json();
+  const content =
+    data?.reply ??
+    data?.base_resp?.status_msg ??
+    data?.choices?.[0]?.message?.content ??
+    data?.choices?.[0]?.messages?.[0]?.text ??
+    data?.choices?.[0]?.text;
+  if (!content || typeof content !== "string") throw new Error("Empty model response");
+  return content.trim();
+}
+
+function buildRewriteContext(fullText: string, selectionText: string) {
+  const idx = fullText.indexOf(selectionText);
+  if (idx < 0) {
+    const head = fullText.slice(0, 1500);
+    const tail = fullText.slice(-1500);
+    return `${head}\n...\n${tail}`;
+  }
+  const WINDOW = 1500;
+  const before = fullText.slice(Math.max(0, idx - WINDOW), idx);
+  const after = fullText.slice(idx + selectionText.length, idx + selectionText.length + WINDOW);
+  return `${before}\n[SELECTED_TEXT]\n${selectionText}\n[/SELECTED_TEXT]\n${after}`;
 }
 
 function createWindow() {
@@ -338,6 +404,10 @@ ipcMain.handle(
       apiType?: ProviderConfig["apiType"];
     }
   ) => {
+    if (payload.apiType === "minimax") {
+      return ["abab6.5s-chat"];
+    }
+
     if (payload.apiType === "gemini") {
       const baseUrl = normalizeBaseUrl(payload.baseUrl, "v1beta");
       const url = `${baseUrl}/models`;
@@ -392,14 +462,19 @@ ipcMain.handle(
   if (!provider.apiKey) throw new Error("Missing API key for provider");
 
   const languageHint = payload.language === "en" ? "Write in English." : "Write in Chinese.";
+  const system =
+    `You are a writing assistant. Only rewrite the selected text. Return ONLY the revised selected text, with no quotes, no extra commentary, and no changes outside the selection. ${languageHint}`;
+
+  if (provider.apiType === "minimax") {
+    const user = `Instruction:\n${payload.instruction}\n\nSelected text:\n${payload.selectionText}\n\nContext around selected text:\n${buildRewriteContext(payload.fullText, payload.selectionText)}\n\nRemember: output ONLY the revised selected text.`;
+    return requestMiniMax(provider, { userText: user, systemText: system, temperature: 0.4 });
+  }
 
   if (provider.apiType === "gemini") {
     const baseUrl = normalizeBaseUrl(provider.baseUrl, "v1beta");
     const modelName = provider.model.startsWith("models/") ? provider.model : `models/${provider.model}`;
     const url = `${baseUrl}/${modelName}:generateContent`;
-    const system =
-      `You are a writing assistant. Only rewrite the selected text. Return ONLY the revised selected text, with no quotes, no extra commentary, and no changes outside the selection. ${languageHint}`;
-    const user = `Instruction:\n${payload.instruction}\n\nFull document:\n${payload.fullText}\n\nSelected text:\n${payload.selectionText}\n\nRemember: output ONLY the revised selected text.`;
+    const user = `Instruction:\n${payload.instruction}\n\nSelected text:\n${payload.selectionText}\n\nContext around selected text:\n${buildRewriteContext(payload.fullText, payload.selectionText)}\n\nRemember: output ONLY the revised selected text.`;
 
     const body = {
       systemInstruction: { parts: [{ text: system }] },
@@ -431,10 +506,7 @@ ipcMain.handle(
   const url = `${baseUrl}/chat/completions`;
   const authHeaders = buildAuthHeaders(provider.authType ?? "bearer", provider.apiKey);
 
-  const system =
-    `You are a writing assistant. Only rewrite the selected text. Return ONLY the revised selected text, with no quotes, no extra commentary, and no changes outside the selection. ${languageHint}`;
-
-  const user = `Instruction:\n${payload.instruction}\n\nFull document:\n${payload.fullText}\n\nSelected text:\n${payload.selectionText}\n\nRemember: output ONLY the revised selected text.`;
+  const user = `Instruction:\n${payload.instruction}\n\nSelected text:\n${payload.selectionText}\n\nContext around selected text:\n${buildRewriteContext(payload.fullText, payload.selectionText)}\n\nRemember: output ONLY the revised selected text.`;
 
   const body = {
     model: provider.model,
@@ -476,6 +548,15 @@ ipcMain.handle(
     const languageHint = payload.language === "en" ? "Write in English." : "Write in Chinese.";
     const system =
       `You are a writing assistant. Write a full article based on the user's prompt. Return only the article in Markdown, with no extra commentary. ${languageHint}`;
+
+    if (provider.apiType === "minimax") {
+      return requestMiniMax(provider, {
+        userText: "",
+        systemText: system,
+        messages: payload.messages,
+        temperature: 0.7
+      });
+    }
 
     if (provider.apiType === "gemini") {
       const baseUrl = normalizeBaseUrl(provider.baseUrl, "v1beta");
@@ -560,6 +641,14 @@ ipcMain.handle(
         : `Generate a concise outline in Markdown bullet list based on the article. Return ONLY the outline. ${languageHint}`;
 
     const user = payload.content;
+
+    if (provider.apiType === "minimax") {
+      return requestMiniMax(provider, {
+        userText: user,
+        systemText: system,
+        temperature: 0.3
+      });
+    }
 
     if (provider.apiType === "gemini") {
       const baseUrl = normalizeBaseUrl(provider.baseUrl, "v1beta");

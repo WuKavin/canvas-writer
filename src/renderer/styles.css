@@ -333,6 +333,11 @@ body {
   outline: none;
 }
 
+.cm-pinned-selection {
+  background: rgba(240, 179, 74, 0.22);
+  border-radius: 2px;
+}
+
 .diff-panel {
   border-top: 1px solid var(--border);
   padding: 12px 16px;
