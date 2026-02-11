@@ -31,6 +31,7 @@ let projectsCache: Project[] = [];
 const isDev = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
+const MODEL_TIMEOUT_MS = 90000;
 
 async function loadStore() {
   if (!storePath) {
@@ -115,6 +116,21 @@ async function ensureBackupDir() {
 
 function safeFilePart(input: string) {
   return input.replace(/[^a-zA-Z0-9-_]/g, "_").slice(0, 80);
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = MODEL_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      throw new Error(`Request timed out after ${Math.floor(timeoutMs / 1000)}s`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function buildRewriteContext(fullText: string, selectionText: string) {
@@ -356,7 +372,7 @@ ipcMain.handle(
     if (payload.apiType === "gemini") {
       const baseUrl = normalizeBaseUrl(payload.baseUrl, "v1beta");
       const url = `${baseUrl}/models`;
-      const res = await fetch(url, {
+      const res = await fetchWithTimeout(url, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -378,7 +394,7 @@ ipcMain.handle(
 
     const baseUrl = normalizeBaseUrl(payload.baseUrl);
     const url = `${baseUrl}/models`;
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -422,7 +438,7 @@ ipcMain.handle(
       generationConfig: { temperature: 0.4 }
     };
 
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -457,7 +473,7 @@ ipcMain.handle(
     temperature: 0.4
   };
 
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -505,7 +521,7 @@ ipcMain.handle(
         generationConfig: { temperature: 0.7 }
       };
 
-      const res = await fetch(url, {
+      const res = await fetchWithTimeout(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -536,7 +552,7 @@ ipcMain.handle(
       temperature: 0.7
     };
 
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -582,7 +598,7 @@ ipcMain.handle(
         contents: [{ role: "user", parts: [{ text: user }] }],
         generationConfig: { temperature: 0.3 }
       };
-      const res = await fetch(url, {
+      const res = await fetchWithTimeout(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -614,7 +630,7 @@ ipcMain.handle(
       temperature: 0.3
     };
 
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

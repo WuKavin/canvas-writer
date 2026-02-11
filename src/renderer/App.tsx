@@ -254,6 +254,8 @@ export default function App() {
   const [lastPrompt, setLastPrompt] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [isBusy, setIsBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<"generate" | "regenerate" | "rewrite" | null>(null);
+  const [busyTick, setBusyTick] = useState(0);
   const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
   const [language, setLanguage] = useState<Language>("zh");
   const [lastBackupDir, setLastBackupDir] = useState<string>("");
@@ -391,6 +393,15 @@ export default function App() {
     editorRef.current?.setPinnedSelection(selectionRange);
   }, [selectionRange]);
 
+  useEffect(() => {
+    if (!busyAction) {
+      setBusyTick(0);
+      return;
+    }
+    const timer = setInterval(() => setBusyTick((n) => (n + 1) % 4), 320);
+    return () => clearInterval(timer);
+  }, [busyAction]);
+
   const activeProvider = useMemo(
     () => providers.find((p) => p.id === activeProviderId),
     [providers, activeProviderId]
@@ -445,6 +456,7 @@ export default function App() {
       });
       setLastBackupDir(backup.dir);
       setIsBusy(true);
+      setBusyAction("generate");
       setStatus(t.generating);
       const nextMessages = [...conversation, { role: "user", content: chatInput.trim() }];
       const content = await api.generateArticle({
@@ -462,6 +474,7 @@ export default function App() {
       setStatus(`${t.generateFail}: ${err?.message ?? err}`);
     } finally {
       setIsBusy(false);
+      setBusyAction(null);
     }
   }
 
@@ -482,6 +495,7 @@ export default function App() {
       });
       setLastBackupDir(backup.dir);
       setIsBusy(true);
+      setBusyAction("regenerate");
       setStatus(language === "zh" ? "正在重新生成..." : "Regenerating...");
       const base = [...conversation];
       if (base.length > 0 && base[base.length - 1].role === "assistant") {
@@ -504,6 +518,7 @@ export default function App() {
       setStatus(`${t.regenerateFail}: ${err?.message ?? err}`);
     } finally {
       setIsBusy(false);
+      setBusyAction(null);
     }
   }
 
@@ -530,6 +545,7 @@ export default function App() {
       });
       setLastBackupDir(backup.dir);
       setIsBusy(true);
+      setBusyAction("rewrite");
       setStatus(language === "zh" ? "正在改写选中文本..." : "Rewriting selection...");
       const fullText = editorRef.current?.getValue() ?? currentContent;
       const effectiveSelectionText =
@@ -560,6 +576,7 @@ export default function App() {
       setStatus(`${t.rewriteFail}: ${err?.message ?? err}`);
     } finally {
       setIsBusy(false);
+      setBusyAction(null);
     }
   }
 
@@ -789,6 +806,22 @@ export default function App() {
     ? diffLines(selectedHistory.content, currentContent)
     : [];
   const previewHtml = useMemo(() => marked.parse(currentContent || ""), [currentContent]);
+  const busyBase =
+    busyAction === "rewrite"
+      ? language === "zh"
+        ? "正在修改选中内容"
+        : "Rewriting selection"
+      : busyAction === "regenerate"
+      ? language === "zh"
+        ? "正在重新生成"
+        : "Regenerating"
+      : busyAction === "generate"
+      ? language === "zh"
+        ? "正在生成文章"
+        : "Generating article"
+      : "";
+  const busyDots = ".".repeat(busyTick + 1);
+  const statusText = busyAction ? `${busyBase}${busyDots}` : status;
 
   useEffect(() => {
     if (articleTitle) {
@@ -1087,7 +1120,7 @@ export default function App() {
             <div className="status">
               {articleTitle ? `${t.titlePrefix}${articleTitle}` : ""}
             </div>
-            <div className="status">{status}</div>
+            <div className="status">{statusText}</div>
           </div>
         </header>
 
