@@ -247,6 +247,7 @@ export default function App() {
   const [currentContent, setCurrentContent] = useState<string>("");
   const [selectionText, setSelectionText] = useState<string>("");
   const [selectionRect, setSelectionRect] = useState<{ left: number; top: number; bottom: number } | null>(null);
+  const [selectionRange, setSelectionRange] = useState<{ from: number; to: number } | null>(null);
   const [selectionInstruction, setSelectionInstruction] = useState<string>("");
   const [chatInput, setChatInput] = useState<string>("");
   const [lastPrompt, setLastPrompt] = useState<string>("");
@@ -381,7 +382,10 @@ export default function App() {
   }, [providerForm.baseUrl, providerForm.apiKey, providerForm.authType, lastModelFetchKey]);
 
   useEffect(() => {
-    if (!selectionText) setSelectionInstruction("");
+    if (!selectionText) {
+      setSelectionInstruction("");
+      setSelectionRange(null);
+    }
   }, [selectionText]);
 
   const activeProvider = useMemo(
@@ -501,8 +505,7 @@ export default function App() {
   }
 
   async function handleRewriteSelection(overrideInstruction?: string) {
-    const selection = editorRef.current?.getSelection();
-    if (!selection || selection.text.trim().length === 0) {
+    if (!selectionRange || selectionText.trim().length === 0) {
       setStatus(t.selectText);
       return;
     }
@@ -529,15 +532,18 @@ export default function App() {
       const revised = await api.rewriteSelection({
         providerId: activeProvider.id,
         fullText,
-        selectionText: selection.text,
+        selectionText,
         instruction: instructionText,
         language
       });
-      editorRef.current?.replaceSelection(revised);
+      editorRef.current?.replaceRange(selectionRange.from, selectionRange.to, revised);
       const updated = editorRef.current?.getValue() ?? "";
       setContent(updated);
       pushHistory(language === "zh" ? "模型改写" : "Rewrite", updated);
       setStatus(t.rewriteDone);
+      setSelectionText("");
+      setSelectionRect(null);
+      setSelectionRange(null);
       setSelectionInstruction("");
     } catch (err: any) {
       setStatus(`${t.rewriteFail}: ${err?.message ?? err}`);
@@ -1102,6 +1108,12 @@ export default function App() {
               onSelectionChange={(text, rect) => {
                 setSelectionText(text);
                 setSelectionRect(rect);
+                if (text.trim().length > 0) {
+                  const sel = editorRef.current?.getSelection();
+                  if (sel && sel.from !== sel.to) {
+                    setSelectionRange({ from: sel.from, to: sel.to });
+                  }
+                }
               }}
             />
           </div>

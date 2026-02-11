@@ -9,6 +9,7 @@ export type EditorHandle = {
   setValue: (value: string) => void;
   getSelection: () => { from: number; to: number; text: string };
   replaceSelection: (text: string) => void;
+  replaceRange: (from: number, to: number, text: string) => void;
   getSelectionRect: () => { left: number; top: number; bottom: number } | null;
 };
 
@@ -100,6 +101,11 @@ const Editor = forwardRef<EditorHandle, EditorProps>(({ initialValue, onChange, 
       if (!view) return;
       const sel = view.state.selection.main;
       view.dispatch({ changes: { from: sel.from, to: sel.to, insert: text } });
+    },
+    replaceRange: (from: number, to: number, text: string) => {
+      const view = viewRef.current;
+      if (!view) return;
+      view.dispatch({ changes: { from, to, insert: text } });
     },
     getSelectionRect: () => {
       const view = viewRef.current;
