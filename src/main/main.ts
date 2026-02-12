@@ -256,6 +256,16 @@ ipcMain.handle("projects:save", async (_evt, payload: { id: string; title: strin
   return { id: payload.id };
 });
 
+ipcMain.handle("projects:delete", async (_evt, id: string) => {
+  const before = projectsCache.length;
+  projectsCache = projectsCache.filter((p) => p.id !== id);
+  if (projectsCache.length !== before) {
+    await saveProjects();
+    return true;
+  }
+  return false;
+});
+
 
 ipcMain.handle("file:open", async () => {
   const result = await dialog.showOpenDialog({

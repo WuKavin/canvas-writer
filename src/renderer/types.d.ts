@@ -11,6 +11,7 @@ declare global {
       listProjects: () => Promise<{ id: string; title: string; content: string; updatedAt: string }[]>;
       saveProject: (payload: { id: string; title: string; content: string }) => Promise<{ id: string }>;
       openProject: (id: string) => Promise<{ id: string; title: string; content: string; updatedAt: string } | null>;
+      deleteProject: (id: string) => Promise<boolean>;
       onSaveRequest: (handler: () => void) => void;
       sendState: (payload: { id: string; title: string; content: string }) => void;
 

@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld("api", {
   listProjects: () => ipcRenderer.invoke("projects:list"),
   saveProject: (payload: { id: string; title: string; content: string }) => ipcRenderer.invoke("projects:save", payload),
   openProject: (id: string) => ipcRenderer.invoke("projects:get", id),
+  deleteProject: (id: string) => ipcRenderer.invoke("projects:delete", id),
   onSaveRequest: (handler: () => void) => ipcRenderer.on("app:save-request", handler),
   sendState: (payload: { id: string; title: string; content: string }) => ipcRenderer.send("app:state-response", payload),
 

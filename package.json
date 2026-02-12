@@ -1,13 +1,15 @@
 {
   "name": "canvas-writer",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Local-first canvas writing app with multi-engine editing",
   "main": "dist/main/main.js",
   "private": true,
   "scripts": {
     "dev": "concurrently -k \"tsc -w -p tsconfig.main.json\" \"vite\" \"wait-on dist/main/main.js http://localhost:5173 && electron .\"",
     "build": "vite build && tsc -p tsconfig.main.json",
-    "dist": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder && node scripts/backup-build.js"
+    "dist": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder && node scripts/backup-build.js",
+    "mobile:sync": "npm run build && npx cap sync android",
+    "mobile:apk": "npm run mobile:sync && cd android && ./gradlew assembleDebug"
   },
   "build": {
     "appId": "com.kavin.canvaswriter",
@@ -34,6 +36,9 @@
   "author": "kavin",
   "license": "GPL-3.0-only",
   "dependencies": {
+    "@capacitor/android": "^8.0.2",
+    "@capacitor/cli": "^8.0.2",
+    "@capacitor/core": "^8.0.2",
     "@codemirror/commands": "^6.10.2",
     "@codemirror/history": "^0.19.2",
     "@codemirror/lang-markdown": "^6.5.0",

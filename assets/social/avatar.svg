@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Canvas Writer Avatar">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#131728"/>
+      <stop offset="100%" stop-color="#0A0D16"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="32%" cy="32%" r="70%">
+      <stop offset="0%" stop-color="#293559" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#0A0D16" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect x="0" y="0" width="1024" height="1024" rx="220" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="220" fill="url(#glow)"/>
+
+  <g transform="translate(512 512)">
+    <circle r="332" fill="none" stroke="#223055" stroke-width="10"/>
+    <circle r="278" fill="none" stroke="#24345C" stroke-width="10"/>
+    <circle r="224" fill="none" stroke="#2A3D66" stroke-width="10"/>
+    <circle r="170" fill="none" stroke="#304974" stroke-width="10"/>
+
+    <path d="M -220 -12 A 220 220 0 0 1 64 -210" fill="none" stroke="#F2B751" stroke-width="34" stroke-linecap="round"/>
+    <path d="M -178 -2 A 178 178 0 0 1 46 -171" fill="none" stroke="#F0A83A" stroke-width="28" stroke-linecap="round"/>
+    <path d="M -136 7 A 136 136 0 0 1 33 -131" fill="none" stroke="#EF9D30" stroke-width="22" stroke-linecap="round"/>
+    <path d="M -94 14 A 94 94 0 0 1 22 -90" fill="none" stroke="#EE9328" stroke-width="16" stroke-linecap="round"/>
+
+    <circle cx="192" cy="-76" r="22" fill="#33D0D7"/>
+    <circle cx="192" cy="-76" r="36" fill="none" stroke="#33D0D7" stroke-opacity="0.25" stroke-width="8"/>
+  </g>
+</svg>

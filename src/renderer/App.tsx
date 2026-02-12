@@ -30,6 +30,7 @@ type HistoryItem = {
 };
 
 type Language = "zh" | "en";
+type ThemeMode = "system" | "light" | "dark";
 
 const i18n = {
   zh: {
@@ -77,6 +78,10 @@ const i18n = {
     clear: "清空",
     currentProvider: "当前供应商",
     language: "语言",
+    theme: "主题",
+    themeSystem: "跟随系统",
+    themeLight: "浅色",
+    themeDark: "深色",
     zh: "中文",
     en: "英文",
     apiType: "API 类型",
@@ -163,6 +168,10 @@ const i18n = {
     clear: "Clear",
     currentProvider: "Current provider",
     language: "Language",
+    theme: "Theme",
+    themeSystem: "System",
+    themeLight: "Light",
+    themeDark: "Dark",
     zh: "Chinese",
     en: "English",
     apiType: "API Type",
@@ -215,6 +224,7 @@ const noopApi: Window["api"] = {
   listProjects: async () => [],
   saveProject: async (payload: { id: string }) => ({ id: payload.id }),
   openProject: async () => null,
+  deleteProject: async () => false,
   onSaveRequest: () => undefined,
   sendState: () => undefined,
   listProviders: async () => [],
@@ -258,6 +268,7 @@ export default function App() {
   const [busyTick, setBusyTick] = useState(0);
   const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
   const [language, setLanguage] = useState<Language>("zh");
+  const [themeMode, setThemeMode] = useState<ThemeMode>("system");
   const [lastBackupDir, setLastBackupDir] = useState<string>("");
   const [conversation, setConversation] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
   const [titleSuggestion, setTitleSuggestion] = useState<string>("");
@@ -284,7 +295,8 @@ export default function App() {
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [modelLoading, setModelLoading] = useState(false);
   const [lastModelFetchKey, setLastModelFetchKey] = useState<string>("");
-  const [providerCollapsed, setProviderCollapsed] = useState<boolean>(false);
+  const [providerCollapsed, setProviderCollapsed] = useState<boolean>(true);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
 
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
@@ -324,6 +336,31 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("cw_language", language);
   }, [language]);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("cw_theme");
+    if (stored === "system" || stored === "light" || stored === "dark") {
+      setThemeMode(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("cw_theme", themeMode);
+  }, [themeMode]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const applyTheme = () => {
+      const resolved = themeMode === "system" ? (mq.matches ? "dark" : "light") : themeMode;
+      root.setAttribute("data-theme", resolved);
+    };
+    applyTheme();
+    if (themeMode !== "system") return;
+    const onChange = () => applyTheme();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [themeMode]);
 
   useEffect(() => {
     if (!hasApi) return;
@@ -691,6 +728,19 @@ export default function App() {
     setDirty(false);
   }
 
+  async function handleDeleteProject(id: string) {
+    await api.deleteProject(id);
+    const list = await api.listProjects();
+    setProjects(list);
+    if (currentProjectId !== id) return;
+    const next = list[0];
+    if (next) {
+      await handleOpenProject(next.id);
+      return;
+    }
+    await handleNewProject();
+  }
+
   function parseCards(text: string) {
     const parts = text.split(/\n{2,}/g).map((p) => p.trim()).filter(Boolean);
     const cryptoObj = (globalThis as typeof globalThis & { crypto?: Crypto }).crypto;
@@ -837,8 +887,8 @@ export default function App() {
   }
 
   return (
-    <div className="app">
-      <aside className="sidebar">
+    <div className={`app ${mobileSidebarOpen ? "sidebar-open" : ""}`}>
+      <aside className={`sidebar ${mobileSidebarOpen ? "open" : ""}`}>
         <div className="brand">
           <div className="brand-row">
             <img className="brand-logo" src={logoUrl} alt="Canvas Writer Logo" />
@@ -849,7 +899,9 @@ export default function App() {
           </div>
         </div>
 
-        <section className="panel">
+        <div className="sidebar-grid">
+          <div className="sidebar-col left-stack">
+        <section className="panel panel-provider">
           <div className="panel-header">
             <div className="panel-title">{t.providers}</div>
             <button className="btn ghost" onClick={() => setProviderCollapsed((v) => !v)}>
@@ -986,9 +1038,68 @@ export default function App() {
             {t.currentProvider}: {activeProvider?.name ?? "—"}
           </div>
         </section>
+        <section className="panel panel-projects">
+          <div className="panel-title">{t.projects}</div>
+          <button className="btn" onClick={handleNewProject}>{t.newProject}</button>
+          <div className="history">
+            {projects.map((p) => (
+              <div
+                key={p.id}
+                className={`history-item ${currentProjectId === p.id ? "active" : ""}`}
+                onClick={() => handleOpenProject(p.id)}
+              >
+                <div className="history-main">
+                  <div className="history-label">{p.title || "Untitled"}</div>
+                  <div className="history-time">{new Date(p.updatedAt).toLocaleString()}</div>
+                </div>
+                <span
+                  className="history-delete"
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteProject(p.id);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter" && e.key !== " ") return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleDeleteProject(p.id);
+                  }}
+                >
+                  {t.remove}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
 
-        <section className="panel">
+        <section className="panel panel-history">
+          <div className="panel-title">{t.history}</div>
+          <button className="btn" onClick={handleSnapshot}>{t.snapshot}</button>
+          <div className="history">
+            {history.map((h) => (
+              <button
+                key={h.id}
+                className={`history-item ${selectedHistoryId === h.id ? "active" : ""}`}
+                onClick={() => setSelectedHistoryId(h.id)}
+              >
+                <div className="history-label">{h.label}</div>
+                <div className="history-time">{h.createdAt}</div>
+              </button>
+            ))}
+          </div>
+          {selectedHistory && (
+            <button className="btn" onClick={() => handleRestoreHistory(selectedHistory.id)}>
+              {t.restore}
+            </button>
+          )}
+        </section>
+          </div>
+          <div className="sidebar-col middle-stack">
+        <section className="panel panel-dialog">
           <div className="panel-title">{t.dialog}</div>
+          <div className="chat-body">
           <div className="chat-history">
             {conversation.length === 0 && (
               <div className="hint">{language === "zh" ? "暂无对话记录。" : "No messages yet."}</div>
@@ -1000,6 +1111,7 @@ export default function App() {
               </div>
             ))}
           </div>
+          <div className="chat-composer">
           <textarea
             className="textarea"
             placeholder={t.promptPlaceholder}
@@ -1029,83 +1141,47 @@ export default function App() {
           <div className="hint">
             {t.selectedChars}: {selectionText.length}
           </div>
-        </section>
-
-        <section className="panel">
-          <div className="panel-title">{t.tools}</div>
-          <div className="button-row">
-            <button className="btn" onClick={handleGenerateTitle} disabled={isBusy}>
-              {t.genTitle}
-            </button>
-            <button className="btn" onClick={handleGenerateOutline} disabled={isBusy}>
-              {t.genOutline}
-            </button>
           </div>
-          {titleSuggestion && (
-            <div className="suggestion">
-              <div className="hint">{t.suggestTitle}</div>
-              <div className="suggestion-text">{titleSuggestion}</div>
-              <button className="btn" onClick={() => applyTitleToContent(titleSuggestion)}>{t.applyTitle}</button>
-            </div>
-          )}
-          {outlineSuggestion && (
-            <div className="suggestion">
-              <div className="hint">{t.suggestOutline}</div>
-              <div className="suggestion-text">{outlineSuggestion}</div>
-              <button className="btn" onClick={() => insertOutline(outlineSuggestion)}>{t.applyOutline}</button>
-            </div>
-          )}
-        </section>
-
-        <section className="panel">
-          <div className="panel-title">{t.projects}</div>
-          <button className="btn" onClick={handleNewProject}>{t.newProject}</button>
-          <div className="history">
-            {projects.map((p) => (
-              <button
-                key={p.id}
-                className={`history-item ${currentProjectId === p.id ? "active" : ""}`}
-                onClick={() => handleOpenProject(p.id)}
-              >
-                <div className="history-label">{p.title || "Untitled"}</div>
-                <div className="history-time">{new Date(p.updatedAt).toLocaleString()}</div>
-              </button>
-            ))}
           </div>
         </section>
 
-        <section className="panel">
-          <div className="panel-title">{t.history}</div>
-          <button className="btn" onClick={handleSnapshot}>{t.snapshot}</button>
-          <div className="history">
-            {history.map((h) => (
-              <button
-                key={h.id}
-                className={`history-item ${selectedHistoryId === h.id ? "active" : ""}`}
-                onClick={() => setSelectedHistoryId(h.id)}
-              >
-                <div className="history-label">{h.label}</div>
-                <div className="history-time">{h.createdAt}</div>
-              </button>
-            ))}
           </div>
-          {selectedHistory && (
-            <button className="btn" onClick={() => handleRestoreHistory(selectedHistory.id)}>
-              {t.restore}
-            </button>
-          )}
-        </section>
+        </div>
       </aside>
+      {mobileSidebarOpen && <div className="sidebar-backdrop" onClick={() => setMobileSidebarOpen(false)} />}
 
       <main className="main">
         <header className="toolbar">
           <div className="toolbar-left">
+            <button className="btn mobile-only" onClick={() => setMobileSidebarOpen((v) => !v)}>
+              {mobileSidebarOpen ? (language === "zh" ? "关闭控制台" : "Close Panel") : (language === "zh" ? "打开控制台" : "Open Panel")}
+            </button>
             <button className="btn" onClick={handleOpen}>{t.open}</button>
             <button className="btn" onClick={handleSave}>{t.save}</button>
             <button className="btn" onClick={handleExportDocx}>{t.exportDocx}</button>
             <button className="btn danger" onClick={() => api.requestQuit()}>{t.quit}</button>
           </div>
           <div className="toolbar-right">
+            <div className="theme-toggle" aria-label={t.theme}>
+              <button
+                className={`theme-btn ${themeMode === "system" ? "active" : ""}`}
+                onClick={() => setThemeMode("system")}
+              >
+                {t.themeSystem}
+              </button>
+              <button
+                className={`theme-btn ${themeMode === "light" ? "active" : ""}`}
+                onClick={() => setThemeMode("light")}
+              >
+                {t.themeLight}
+              </button>
+              <button
+                className={`theme-btn ${themeMode === "dark" ? "active" : ""}`}
+                onClick={() => setThemeMode("dark")}
+              >
+                {t.themeDark}
+              </button>
+            </div>
             <div className="button-row">
               <button className={`btn ${viewMode === "edit" ? "primary" : ""}`} onClick={() => setViewMode("edit")}>
                 {t.editMode}
