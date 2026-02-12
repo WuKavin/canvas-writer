@@ -42,6 +42,9 @@ const i18n = {
     add: "新增",
     edit: "编辑",
     remove: "删除",
+    exportProviders: "导出供应商",
+    importProviders: "导入供应商",
+    providerPassphrase: "供应商导入/导出密码",
     providerConfig: "供应商配置",
     providerType: "选择供应商类型",
     providerName: "名称（例如 Kimi、硅基流动）",
@@ -101,6 +104,8 @@ const i18n = {
     selectText: "请先选中要改写的文本。",
     providerSaved: "供应商已保存。",
     providerRemoved: "供应商已删除。",
+    providersExported: "供应商配置已导出。",
+    providersImported: "供应商配置已导入。",
     needModelInfo: "需要填写 Base URL 和 API Key 才能获取模型列表。",
     modelsFetched: "模型列表已获取。",
     modelsEmpty: "未返回模型列表，可能该供应商不支持 /models。",
@@ -132,6 +137,9 @@ const i18n = {
     add: "Add",
     edit: "Edit",
     remove: "Delete",
+    exportProviders: "Export Providers",
+    importProviders: "Import Providers",
+    providerPassphrase: "Provider import/export passphrase",
     providerConfig: "Provider Setup",
     providerType: "Select provider type",
     providerName: "Name (e.g. Kimi, SiliconFlow)",
@@ -191,6 +199,8 @@ const i18n = {
     selectText: "Select a portion of text to rewrite.",
     providerSaved: "Provider saved.",
     providerRemoved: "Provider removed.",
+    providersExported: "Providers exported.",
+    providersImported: "Providers imported.",
     needModelInfo: "Base URL and API Key are required to fetch models.",
     modelsFetched: "Models fetched.",
     modelsEmpty: "No models returned. Provider might not support /models.",
@@ -232,6 +242,8 @@ const noopApi: Window["api"] = {
   setActiveProvider: async () => false,
   saveProvider: async (provider: ProviderConfig) => provider,
   deleteProvider: async () => false,
+  exportProviders: async () => null,
+  importProviders: async () => null,
   fetchModels: async () => [],
   generateArticle: async () => "",
   assistArticle: async () => "",
@@ -292,6 +304,7 @@ export default function App() {
   });
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [providerType, setProviderType] = useState<string>("");
+  const [providerPassphrase, setProviderPassphrase] = useState<string>("");
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [modelLoading, setModelLoading] = useState(false);
   const [lastModelFetchKey, setLastModelFetchKey] = useState<string>("");
@@ -851,6 +864,48 @@ export default function App() {
     setActiveProviderId(id);
   }
 
+  async function handleExportProviders() {
+    const passphrase = providerPassphrase.trim();
+    if (!passphrase) {
+      setStatus(language === "zh" ? "请先输入供应商导入/导出密码。" : "Enter a provider import/export passphrase first.");
+      return;
+    }
+    try {
+      if (typeof api.exportProviders !== "function") {
+        setStatus(language === "zh" ? "当前环境不支持导出供应商。" : "Provider export is not available in this environment.");
+        return;
+      }
+      const result = await api.exportProviders({ passphrase });
+      if (!result) return;
+      setStatus(`${t.providersExported} ${result.filePath}`);
+    } catch (err: any) {
+      setStatus(`${language === "zh" ? "导出失败" : "Export failed"}: ${err?.message ?? err}`);
+    }
+  }
+
+  async function handleImportProviders() {
+    const passphrase = providerPassphrase.trim();
+    if (!passphrase) {
+      setStatus(language === "zh" ? "请先输入供应商导入/导出密码。" : "Enter a provider import/export passphrase first.");
+      return;
+    }
+    try {
+      if (typeof api.importProviders !== "function") {
+        setStatus(language === "zh" ? "当前环境不支持导入供应商。" : "Provider import is not available in this environment.");
+        return;
+      }
+      const result = await api.importProviders({ passphrase });
+      if (!result) return;
+      const list = await api.listProviders();
+      setProviders(list);
+      const active = await api.getActiveProvider();
+      setActiveProviderId(active ?? list[0]?.id);
+      setStatus(`${t.providersImported} (${result.importedCount})`);
+    } catch (err: any) {
+      setStatus(`${language === "zh" ? "导入失败" : "Import failed"}: ${err?.message ?? err}`);
+    }
+  }
+
   const selectedHistory = history.find((h) => h.id === selectedHistoryId);
   const diff = selectedHistory
     ? diffLines(selectedHistory.content, currentContent)
@@ -1036,6 +1091,17 @@ export default function App() {
           )}
           <div className="hint provider-current">
             {t.currentProvider}: {activeProvider?.name ?? "—"}
+          </div>
+          <input
+            className="input"
+            type="password"
+            placeholder={t.providerPassphrase}
+            value={providerPassphrase}
+            onChange={(e) => setProviderPassphrase(e.target.value)}
+          />
+          <div className="button-row">
+            <button className="btn" onClick={handleExportProviders}>{t.exportProviders}</button>
+            <button className="btn" onClick={handleImportProviders}>{t.importProviders}</button>
           </div>
         </section>
         <section className="panel panel-projects">

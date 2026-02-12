@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld("api", {
   setActiveProvider: (id: string) => ipcRenderer.invoke("providers:setActive", id),
   saveProvider: (provider: ProviderConfig): Promise<ProviderPublic> => ipcRenderer.invoke("providers:save", provider),
   deleteProvider: (id: string) => ipcRenderer.invoke("providers:delete", id),
+  exportProviders: (payload: { passphrase: string }) => ipcRenderer.invoke("providers:export", payload),
+  importProviders: (payload: { passphrase: string }) => ipcRenderer.invoke("providers:import", payload),
 
   fetchModels: (payload: { baseUrl: string; apiKey: string; authType?: "bearer" | "x-api-key" | "api-key" | "x-goog-api-key"; apiType?: "openai" | "gemini" | "minimax" }) =>
     ipcRenderer.invoke("providers:fetchModels", payload),

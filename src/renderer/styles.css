@@ -281,6 +281,18 @@ body {
   margin-top: 8px;
 }
 
+.panel-provider .provider-current + .button-row {
+  margin-top: 14px;
+  margin-bottom: 0;
+}
+
+.panel-projects > .btn,
+.panel-history > .btn {
+  margin-top: 14px;
+  margin-bottom: 0;
+  align-self: flex-start;
+}
+
 .history {
   display: grid;
   gap: 8px;

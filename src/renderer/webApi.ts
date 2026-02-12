@@ -244,6 +244,12 @@ function ensureWebApi() {
       }
       return true;
     },
+    exportProviders: async (_payload: { passphrase: string }) => {
+      throw new Error("Provider export is only available in desktop app");
+    },
+    importProviders: async (_payload: { passphrase: string }) => {
+      throw new Error("Provider import is only available in desktop app");
+    },
     fetchModels: async (payload: { baseUrl: string; apiKey: string; authType?: ProviderConfig["authType"]; apiType?: ProviderConfig["apiType"] }) => {
       if (payload.apiType === "minimax") return ["MiniMax-M1", "MiniMax-Text-01", "MiniMax-M2.1"];
       if (payload.apiType === "gemini") {

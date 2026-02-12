@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import path from "path";
 import fs from "fs/promises";
+import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "crypto";
 import htmlToDocx from "html-to-docx";
 type ProviderConfig = {
   id: string;
@@ -116,6 +117,45 @@ async function ensureBackupDir() {
 
 function safeFilePart(input: string) {
   return input.replace(/[^a-zA-Z0-9-_]/g, "_").slice(0, 80);
+}
+
+function encryptProviderBundle(data: unknown, passphrase: string) {
+  const salt = randomBytes(16);
+  const iv = randomBytes(12);
+  const key = scryptSync(passphrase, salt, 32);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const plaintext = Buffer.from(JSON.stringify(data), "utf8");
+  const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return {
+    format: "canvas-writer-providers-v1",
+    alg: "aes-256-gcm",
+    kdf: "scrypt",
+    salt: salt.toString("base64"),
+    iv: iv.toString("base64"),
+    tag: tag.toString("base64"),
+    data: encrypted.toString("base64")
+  };
+}
+
+function decryptProviderBundle(
+  payload: {
+    salt: string;
+    iv: string;
+    tag: string;
+    data: string;
+  },
+  passphrase: string
+) {
+  const salt = Buffer.from(payload.salt, "base64");
+  const iv = Buffer.from(payload.iv, "base64");
+  const tag = Buffer.from(payload.tag, "base64");
+  const data = Buffer.from(payload.data, "base64");
+  const key = scryptSync(passphrase, salt, 32);
+  const decipher = createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(tag);
+  const decrypted = Buffer.concat([decipher.update(data), decipher.final()]).toString("utf8");
+  return JSON.parse(decrypted);
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = MODEL_TIMEOUT_MS) {
@@ -364,6 +404,87 @@ ipcMain.handle("providers:delete", async (_evt, id: string) => {
   }
   await saveStore();
   return true;
+});
+
+ipcMain.handle("providers:export", async (_evt, payload: { passphrase: string }) => {
+  const passphrase = payload.passphrase?.trim();
+  if (!passphrase) throw new Error("Passphrase is required");
+  const saveOptions = {
+    title: "Export Providers",
+    defaultPath: "canvas-writer-providers.cwprov",
+    filters: [{ name: "Canvas Writer Provider Bundle", extensions: ["cwprov"] }]
+  };
+  const result = mainWindow
+    ? await dialog.showSaveDialog(mainWindow, saveOptions)
+    : await dialog.showSaveDialog(saveOptions);
+  if (result.canceled || !result.filePath) return null;
+  const encrypted = encryptProviderBundle(
+    {
+      exportedAt: new Date().toISOString(),
+      activeProviderId: storeCache.activeProviderId,
+      providers: getProviders()
+    },
+    passphrase
+  );
+  await fs.writeFile(result.filePath, JSON.stringify(encrypted, null, 2), "utf8");
+  return { filePath: result.filePath };
+});
+
+ipcMain.handle("providers:import", async (_evt, payload: { passphrase: string }) => {
+  const passphrase = payload.passphrase?.trim();
+  if (!passphrase) throw new Error("Passphrase is required");
+  const openOptions = {
+    title: "Import Providers",
+    properties: ["openFile"] as ("openFile")[],
+    filters: [{ name: "Canvas Writer Provider Bundle", extensions: ["cwprov", "json"] }]
+  };
+  const result = mainWindow
+    ? await dialog.showOpenDialog(mainWindow, openOptions)
+    : await dialog.showOpenDialog(openOptions);
+  if (result.canceled || result.filePaths.length === 0) return null;
+  const filePath = result.filePaths[0];
+  const raw = await fs.readFile(filePath, "utf8");
+  let parsed: any;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("Invalid provider bundle file");
+  }
+  if (
+    !parsed ||
+    parsed.format !== "canvas-writer-providers-v1" ||
+    typeof parsed.salt !== "string" ||
+    typeof parsed.iv !== "string" ||
+    typeof parsed.tag !== "string" ||
+    typeof parsed.data !== "string"
+  ) {
+    throw new Error("Unsupported provider bundle format");
+  }
+  let decrypted: any;
+  try {
+    decrypted = decryptProviderBundle(parsed, passphrase);
+  } catch {
+    throw new Error("Failed to decrypt provider bundle. Check passphrase.");
+  }
+  const incomingProviders = Array.isArray(decrypted?.providers) ? decrypted.providers : [];
+  const incomingMap = new Map<string, ProviderConfig>();
+  for (const provider of incomingProviders) {
+    if (!provider?.id || !provider?.name || !provider?.baseUrl || !provider?.model) continue;
+    incomingMap.set(provider.id, provider as ProviderConfig);
+  }
+  const currentMap = new Map(getProviders().map((p) => [p.id, p] as const));
+  for (const [id, provider] of incomingMap.entries()) {
+    currentMap.set(id, provider);
+  }
+  const merged = Array.from(currentMap.values());
+  setProviders(merged);
+  if (typeof decrypted?.activeProviderId === "string" && currentMap.has(decrypted.activeProviderId)) {
+    storeCache.activeProviderId = decrypted.activeProviderId;
+  } else if (!storeCache.activeProviderId && merged[0]) {
+    storeCache.activeProviderId = merged[0].id;
+  }
+  await saveStore();
+  return { filePath, importedCount: incomingMap.size };
 });
 
 ipcMain.handle(

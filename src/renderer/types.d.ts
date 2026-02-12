@@ -20,6 +20,8 @@ declare global {
       setActiveProvider: (id: string) => Promise<boolean>;
       saveProvider: (provider: ProviderConfig) => Promise<ProviderPublic>;
       deleteProvider: (id: string) => Promise<boolean>;
+      exportProviders: (payload: { passphrase: string }) => Promise<{ filePath: string } | null>;
+      importProviders: (payload: { passphrase: string }) => Promise<{ filePath: string; importedCount: number } | null>;
       fetchModels: (payload: { baseUrl: string; apiKey: string; authType?: "bearer" | "x-api-key" | "api-key" | "x-goog-api-key"; apiType?: "openai" | "gemini" | "minimax" }) => Promise<string[]>;
 
       generateArticle: (payload: { providerId: string; messages: { role: "user" | "assistant"; content: string }[]; language: "zh" | "en" }) => Promise<string>;
