@@ -75,3 +75,12 @@ Web fallback（无 Electron API）：LocalStorage
 - 此交接文档
 - 最近 Release 说明（GitHub Releases）
 - 若需 Windows 包：指导执行 GitHub Actions 构建
+
+## 12. 变更记录规范（默认执行）
+以下变更会被写入此文档并提交：
+- 版本号或 Release 变更
+- 关键功能或核心流程变更
+- 架构与数据存储改动
+- 构建/发布流程变更
+- 重要 UI 结构调整
+- 已知问题或重要约束的更新
