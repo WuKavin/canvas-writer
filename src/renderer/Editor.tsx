@@ -44,6 +44,20 @@ const pinnedSelectionField = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field)
 });
 
+function computeSelectionRect(view: EditorView, from: number, to: number) {
+  if (from === to) return null;
+  const head = Math.min(from, to);
+  const tail = Math.max(from, to);
+  const startRect = view.coordsAtPos(head) ?? view.coordsAtPos(Math.min(head + 1, view.state.doc.length));
+  const endProbe = Math.max(head, tail - 1);
+  const endRect = view.coordsAtPos(endProbe) ?? view.coordsAtPos(tail);
+  if (!startRect || !endRect) return null;
+  const left = Math.min(startRect.left, endRect.left);
+  const top = Math.min(startRect.top, endRect.top);
+  const bottom = Math.max(startRect.bottom, endRect.bottom);
+  return { left, top, bottom };
+}
+
 const Editor = forwardRef<EditorHandle, EditorProps>(({ initialValue, onChange, onSelectionChange }, ref) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -75,16 +89,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(({ initialValue, onChange, 
             if (sel.from === sel.to) {
               onSelectionRef.current(text, null);
             } else {
-              const fromRect = update.view.coordsAtPos(sel.from);
-              const toRect = update.view.coordsAtPos(sel.to);
-              if (fromRect && toRect) {
-                const left = Math.min(fromRect.left, toRect.left);
-                const top = Math.min(fromRect.top, toRect.top);
-                const bottom = Math.max(fromRect.bottom, toRect.bottom);
-                onSelectionRef.current(text, { left, top, bottom });
-              } else {
-                onSelectionRef.current(text, null);
-              }
+              onSelectionRef.current(text, computeSelectionRect(update.view, sel.from, sel.to));
             }
           }
         })
@@ -142,14 +147,7 @@ const Editor = forwardRef<EditorHandle, EditorProps>(({ initialValue, onChange, 
       const view = viewRef.current;
       if (!view) return null;
       const sel = view.state.selection.main;
-      if (sel.from === sel.to) return null;
-      const fromRect = view.coordsAtPos(sel.from);
-      const toRect = view.coordsAtPos(sel.to);
-      if (!fromRect || !toRect) return null;
-      const left = Math.min(fromRect.left, toRect.left);
-      const top = Math.min(fromRect.top, toRect.top);
-      const bottom = Math.max(fromRect.bottom, toRect.bottom);
-      return { left, top, bottom };
+      return computeSelectionRect(view, sel.from, sel.to);
     }
   }));
 

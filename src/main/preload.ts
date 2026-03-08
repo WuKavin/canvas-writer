@@ -5,7 +5,7 @@ type ProviderConfig = {
   name: string;
   baseUrl: string;
   model: string;
-  apiType?: "openai" | "gemini" | "minimax";
+  apiType?: "openai" | "claude" | "gemini" | "minimax" | "local";
   authType?: "bearer" | "x-api-key" | "api-key" | "x-goog-api-key";
   apiKey?: string;
 };
@@ -13,11 +13,18 @@ type ProviderConfig = {
 type ProviderPublic = Omit<ProviderConfig, "apiKey">;
 
 contextBridge.exposeInMainWorld("api", {
+  getSetupStatus: () => ipcRenderer.invoke("setup:getStatus"),
+  completeSetup: (payload: { mode: "provider" | "local" }) => ipcRenderer.invoke("setup:complete", payload),
+  getLocalModelStatus: () => ipcRenderer.invoke("local:modelStatus"),
+  installLocalModel: () => ipcRenderer.invoke("local:installModel"),
+  getNetworkStatus: () => ipcRenderer.invoke("network:status"),
+
   openFile: () => ipcRenderer.invoke("file:open"),
   saveFile: (payload: { filePath?: string; content: string }) => ipcRenderer.invoke("file:save", payload),
   exportDocx: (payload: { markdown: string; html: string }) => ipcRenderer.invoke("file:exportDocx", payload),
   backupFile: (payload: { content: string; reason: string; title?: string }) => ipcRenderer.invoke("file:backup", payload),
   requestQuit: () => ipcRenderer.invoke("app:quit"),
+  openExternal: (url: string) => ipcRenderer.invoke("app:openExternal", url),
   listProjects: () => ipcRenderer.invoke("projects:list"),
   saveProject: (payload: { id: string; title: string; content: string }) => ipcRenderer.invoke("projects:save", payload),
   openProject: (id: string) => ipcRenderer.invoke("projects:get", id),
@@ -30,14 +37,18 @@ contextBridge.exposeInMainWorld("api", {
   setActiveProvider: (id: string) => ipcRenderer.invoke("providers:setActive", id),
   saveProvider: (provider: ProviderConfig): Promise<ProviderPublic> => ipcRenderer.invoke("providers:save", provider),
   deleteProvider: (id: string) => ipcRenderer.invoke("providers:delete", id),
+  testProvider: (payload: { baseUrl: string; apiKey?: string; model: string; apiType?: "openai" | "claude" | "gemini" | "minimax" | "local" }) =>
+    ipcRenderer.invoke("providers:test", payload),
   exportProviders: (payload: { passphrase: string }) => ipcRenderer.invoke("providers:export", payload),
   importProviders: (payload: { passphrase: string }) => ipcRenderer.invoke("providers:import", payload),
 
-  fetchModels: (payload: { baseUrl: string; apiKey: string; authType?: "bearer" | "x-api-key" | "api-key" | "x-goog-api-key"; apiType?: "openai" | "gemini" | "minimax" }) =>
+  fetchModels: (payload: { baseUrl: string; apiKey: string; authType?: "bearer" | "x-api-key" | "api-key" | "x-goog-api-key"; apiType?: "openai" | "claude" | "gemini" | "minimax" | "local" }) =>
     ipcRenderer.invoke("providers:fetchModels", payload),
 
   generateArticle: (payload: { providerId: string; messages: { role: "user" | "assistant"; content: string }[]; language: "zh" | "en" }) =>
     ipcRenderer.invoke("model:generate", payload),
+  generateArticleWithSearch: (payload: { providerId: string; prompt: string; language: "zh" | "en" }) =>
+    ipcRenderer.invoke("model:generateWithSearch", payload),
   assistArticle: (payload: { providerId: string; purpose: "title" | "outline"; content: string; language: "zh" | "en" }) =>
     ipcRenderer.invoke("model:assist", payload),
 

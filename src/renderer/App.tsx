@@ -13,13 +13,9 @@ const emptyProvider = {
 };
 
 const providerPresets = [
-  { id: "openai", label: "OpenAI", baseUrl: "https://api.openai.com/v1", apiType: "openai", authType: "bearer" },
-  { id: "moonshot", label: "Kimi (Moonshot)", baseUrl: "https://api.moonshot.ai/v1", apiType: "openai", authType: "bearer" },
-  { id: "siliconflow-com", label: "硅基流动 (SiliconFlow 国际)", baseUrl: "https://api.siliconflow.com/v1", apiType: "openai", authType: "bearer" },
-  { id: "siliconflow-cn", label: "硅基流动 (SiliconFlow 中国)", baseUrl: "https://api.siliconflow.cn/v1", apiType: "openai", authType: "bearer" },
-  { id: "minimax-cn", label: "MiniMax (中国)", baseUrl: "https://api.minimaxi.com/v1", apiType: "minimax", authType: "bearer" },
-  { id: "dashscope", label: "阿里云 DashScope 兼容模式", baseUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", apiType: "openai", authType: "bearer" },
-  { id: "gemini", label: "Gemini (AI Studio)", baseUrl: "https://generativelanguage.googleapis.com/v1beta", apiType: "gemini", authType: "x-goog-api-key" }
+  { id: "openai", label: "OpenAI Compatible", baseUrl: "https://api.openai.com/v1", apiType: "openai" },
+  { id: "claude", label: "Claude Compatible", baseUrl: "https://api.anthropic.com/v1", apiType: "claude" },
+  { id: "local", label: "Local Model (Ollama)", baseUrl: "http://127.0.0.1:11434/v1", apiType: "local" }
 ];
 
 type HistoryItem = {
@@ -31,6 +27,7 @@ type HistoryItem = {
 
 type Language = "zh" | "en";
 type ThemeMode = "system" | "light" | "dark";
+type ComposeMode = "direct" | "search";
 
 const i18n = {
   zh: {
@@ -126,7 +123,31 @@ const i18n = {
     ,
     projects: "项目",
     newProject: "新建项目",
-    openProject: "打开项目"
+    openProject: "打开项目",
+    tabEditor: "编辑",
+    tabModel: "模型",
+    tabHistory: "历史",
+    composeDirect: "直接生成",
+    composeSearch: "搜索成文",
+    networkOnline: "联网",
+    networkOffline: "离线",
+    searchUnavailableOffline: "当前离线，搜索成文不可用。",
+    onboardingTitle: "开始使用 Canvas Writer",
+    onboardingDesc: "你可以先接入在线 Provider，或直接下载本地 qwen3.5:4b（Ollama）离线写作。",
+    onboardingProvider: "我先配置 Provider",
+    onboardingLocal: "下载本地 qwen3.5:4b",
+    onboardingChecking: "检测本地环境中...",
+    onboardingInstalling: "正在下载本地模型，请稍候...",
+    onboardingInstalled: "本地模型已可用，已切换到 Local Provider。",
+    onboardingOllamaMissing: "未检测到 Ollama，请先安装 Ollama 后重试。",
+    providerMode: "Provider 类型",
+    providerOpenAI: "OpenAI 兼容",
+    providerClaude: "Claude 兼容",
+    providerLocal: "本地模型",
+    testProvider: "测试连接",
+    testPassed: "连接测试通过。",
+    testFailed: "连接测试失败",
+    installLocalAnytime: "下载/更新本地 qwen3.5:4b"
   },
   en: {
     appSubtitle: "Local canvas, multi-engine",
@@ -221,16 +242,46 @@ const i18n = {
     ,
     projects: "Projects",
     newProject: "New Project",
-    openProject: "Open Project"
+    openProject: "Open Project",
+    tabEditor: "Editor",
+    tabModel: "Model",
+    tabHistory: "History",
+    composeDirect: "Direct",
+    composeSearch: "Search + Write",
+    networkOnline: "Online",
+    networkOffline: "Offline",
+    searchUnavailableOffline: "You are offline. Search-based writing is unavailable.",
+    onboardingTitle: "Welcome to Canvas Writer",
+    onboardingDesc: "Start with a cloud provider or download local qwen3.5:4b (Ollama) for offline writing.",
+    onboardingProvider: "Set up Provider first",
+    onboardingLocal: "Download local qwen3.5:4b",
+    onboardingChecking: "Checking local environment...",
+    onboardingInstalling: "Downloading local model. This may take a while...",
+    onboardingInstalled: "Local model is ready and Local Provider is now active.",
+    onboardingOllamaMissing: "Ollama is not installed. Install Ollama and try again.",
+    providerMode: "Provider Type",
+    providerOpenAI: "OpenAI Compatible",
+    providerClaude: "Claude Compatible",
+    providerLocal: "Local Model",
+    testProvider: "Test Connection",
+    testPassed: "Connection test passed.",
+    testFailed: "Connection test failed",
+    installLocalAnytime: "Download/Update local qwen3.5:4b"
   }
 } as const;
 
 const noopApi: Window["api"] = {
+  getSetupStatus: async () => ({ completed: true, hasProviders: false }),
+  completeSetup: async () => true,
+  getLocalModelStatus: async () => ({ ollamaInstalled: false, modelInstalled: false }),
+  installLocalModel: async () => ({ ollamaInstalled: false, modelInstalled: false }),
+  getNetworkStatus: async () => ({ online: navigator.onLine }),
   openFile: async () => null,
   saveFile: async () => null,
   exportDocx: async () => null,
   backupFile: async () => ({ filePath: "", dir: "" }),
   requestQuit: async () => false,
+  openExternal: async () => false,
   listProjects: async () => [],
   saveProject: async (payload: { id: string }) => ({ id: payload.id }),
   openProject: async () => null,
@@ -242,10 +293,12 @@ const noopApi: Window["api"] = {
   setActiveProvider: async () => false,
   saveProvider: async (provider: ProviderConfig) => provider,
   deleteProvider: async () => false,
+  testProvider: async () => ({ ok: false, message: "noop" }),
   exportProviders: async () => null,
   importProviders: async () => null,
   fetchModels: async () => [],
   generateArticle: async () => "",
+  generateArticleWithSearch: async () => "",
   assistArticle: async () => "",
   rewriteSelection: async () => ""
 };
@@ -259,6 +312,19 @@ function compactMessages(messages: { role: "user" | "assistant"; content: string
   const MAX_HISTORY_MESSAGES = 8;
   if (messages.length <= MAX_HISTORY_MESSAGES) return messages;
   return messages.slice(-MAX_HISTORY_MESSAGES);
+}
+
+function normalizeErrorMessage(err: unknown) {
+  const raw = err && typeof err === "object" && "message" in err ? String((err as any).message) : String(err ?? "");
+  return raw
+    .replace(/^Error invoking remote method '[^']+':\s*/i, "")
+    .replace(/^Error:\s*/i, "")
+    .trim();
+}
+
+function displayProviderName(p?: Partial<ProviderPublic> | null) {
+  if (!p) return "—";
+  return (p.name && p.name.trim()) || (p.model && p.model.trim()) || (p.baseUrl && p.baseUrl.trim()) || "Unnamed Provider";
 }
 
 export default function App() {
@@ -303,13 +369,22 @@ export default function App() {
     authType: "bearer"
   });
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
-  const [providerType, setProviderType] = useState<string>("");
+  const [providerType, setProviderType] = useState<string>("openai");
   const [providerPassphrase, setProviderPassphrase] = useState<string>("");
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [modelLoading, setModelLoading] = useState(false);
+  const [providerTesting, setProviderTesting] = useState(false);
   const [lastModelFetchKey, setLastModelFetchKey] = useState<string>("");
   const [providerCollapsed, setProviderCollapsed] = useState<boolean>(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState<boolean>(false);
+  const [mobilePane, setMobilePane] = useState<"editor" | "model" | "history">("editor");
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() => window.matchMedia("(max-width: 980px)").matches);
+  const [setupReady, setSetupReady] = useState(false);
+  const [setupCompleted, setSetupCompleted] = useState(true);
+  const [localModelStatus, setLocalModelStatus] = useState<{ ollamaInstalled: boolean; modelInstalled: boolean } | null>(null);
+  const [installingLocalModel, setInstallingLocalModel] = useState(false);
+  const [composeMode, setComposeMode] = useState<ComposeMode>("direct");
+  const [networkOnline, setNetworkOnline] = useState(true);
 
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
@@ -334,16 +409,49 @@ export default function App() {
     }
     (async () => {
       try {
+        const setup = await api.getSetupStatus();
+        setSetupCompleted(setup.completed);
         const list = await api.listProviders();
         setProviders(list);
         const active = await api.getActiveProvider();
         setActiveProviderId(active ?? list[0]?.id);
         const projects = await api.listProjects();
         setProjects(projects);
+        const online = await api.getNetworkStatus();
+        setNetworkOnline(online.online);
+        if (!setup.completed) {
+          const localStatus = await api.getLocalModelStatus();
+          setLocalModelStatus(localStatus);
+        }
       } catch {
         // Fail safe: keep UI usable even if IPC init fails
+      } finally {
+        setSetupReady(true);
       }
     })();
+  }, [api]);
+
+  useEffect(() => {
+    if (!providers.length) return;
+    if (!activeProviderId || !providers.some((p) => p.id === activeProviderId)) {
+      const nextId = providers[0].id;
+      setActiveProviderId(nextId);
+      api.setActiveProvider(nextId).catch(() => undefined);
+    }
+  }, [providers, activeProviderId, api]);
+
+  useEffect(() => {
+    const refresh = async () => {
+      try {
+        const online = await api.getNetworkStatus();
+        setNetworkOnline(online.online);
+      } catch {
+        setNetworkOnline(false);
+      }
+    };
+    refresh();
+    const timer = setInterval(refresh, 15000);
+    return () => clearInterval(timer);
   }, [api]);
 
   useEffect(() => {
@@ -405,6 +513,14 @@ export default function App() {
 
 
   useEffect(() => {
+    const mq = window.matchMedia("(max-width: 980px)");
+    const sync = () => setIsMobileViewport(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
     if (!selectedHistoryId && history.length > 0) {
       setSelectedHistoryId(history[0].id);
     }
@@ -424,7 +540,8 @@ export default function App() {
   useEffect(() => {
     const baseUrl = providerForm.baseUrl.trim();
     const apiKey = providerForm.apiKey?.trim() ?? "";
-    if (!baseUrl || apiKey.length < 8) return;
+    if (!baseUrl) return;
+    if ((providerForm.apiType ?? "openai") !== "local" && apiKey.length < 8) return;
     const key = `${baseUrl}|${apiKey}|${providerForm.authType ?? "bearer"}`;
     if (key === lastModelFetchKey) return;
     const timer = setTimeout(() => {
@@ -457,6 +574,25 @@ export default function App() {
     [providers, activeProviderId]
   );
 
+  function getProviderModeLabel(mode: string) {
+    if (mode === "claude") return t.providerClaude;
+    if (mode === "local") return t.providerLocal;
+    return t.providerOpenAI;
+  }
+
+  function applyProviderMode(mode: string) {
+    const preset = providerPresets.find((p) => p.id === mode) ?? providerPresets[0];
+    setProviderType(preset.id);
+    setProviderForm((p) => ({
+      ...p,
+      name: preset.label,
+      baseUrl: preset.baseUrl,
+      apiType: preset.apiType as ProviderConfig["apiType"],
+      authType: "bearer",
+      apiKey: (preset.apiType as ProviderConfig["apiType"]) === "local" ? (p.apiKey || "ollama") : p.apiKey
+    }));
+  }
+
   async function handleOpen() {
     const result = await api.openFile();
     if (!result) return;
@@ -485,7 +621,8 @@ export default function App() {
       if (!result) return;
       setStatus(language === "zh" ? `已导出 DOCX 到 ${result.filePath}` : `Exported DOCX to ${result.filePath}`);
     } catch (err: any) {
-      setStatus(language === "zh" ? `导出失败: ${err?.message ?? err}` : `Export failed: ${err?.message ?? err}`);
+      const msg = normalizeErrorMessage(err);
+      setStatus(language === "zh" ? `导出失败: ${msg}` : `Export failed: ${msg}`);
     }
   }
 
@@ -494,11 +631,17 @@ export default function App() {
       setStatus(t.noProvider);
       return;
     }
+    if (composeMode === "search" && !networkOnline) {
+      setStatus(t.searchUnavailableOffline);
+      return;
+    }
     if (!chatInput.trim()) {
       setStatus(t.noPrompt);
       return;
     }
     try {
+      const nextMessages = [...conversation, { role: "user", content: chatInput.trim() }];
+      setConversation(nextMessages);
       const backup = await api.backupFile({
         content: editorRef.current?.getValue() ?? currentContent,
         reason: "before_generate",
@@ -508,12 +651,18 @@ export default function App() {
       setIsBusy(true);
       setBusyAction("generate");
       setStatus(t.generating);
-      const nextMessages = [...conversation, { role: "user", content: chatInput.trim() }];
-      const content = await api.generateArticle({
-        providerId: activeProvider.id,
-        messages: compactMessages(nextMessages),
-        language
-      });
+      const content =
+        composeMode === "search"
+          ? await api.generateArticleWithSearch({
+              providerId: activeProvider.id,
+              prompt: chatInput.trim(),
+              language
+            })
+          : await api.generateArticle({
+              providerId: activeProvider.id,
+              messages: compactMessages(nextMessages),
+              language
+            });
       editorRef.current?.setValue(content);
       setContent(content);
       pushHistory(language === "zh" ? "生成文章" : "Generated", content);
@@ -521,7 +670,9 @@ export default function App() {
       setConversation([...nextMessages, { role: "assistant", content }]);
       setStatus(t.generated);
     } catch (err: any) {
-      setStatus(`${t.generateFail}: ${err?.message ?? err}`);
+      const msg = `${t.generateFail}: ${normalizeErrorMessage(err)}`;
+      setConversation((prev) => [...prev, { role: "assistant", content: msg }]);
+      setStatus(`${t.generateFail}: ${normalizeErrorMessage(err)}`);
     } finally {
       setIsBusy(false);
       setBusyAction(null);
@@ -538,6 +689,19 @@ export default function App() {
       return;
     }
     try {
+      if (composeMode === "search") {
+        const content = await api.generateArticleWithSearch({
+          providerId: activeProvider.id,
+          prompt: lastPrompt,
+          language
+        });
+        editorRef.current?.setValue(content);
+        setContent(content);
+        pushHistory(language === "zh" ? "重新生成" : "Regenerated", content);
+        setConversation((prev) => [...prev, { role: "assistant", content }]);
+        setStatus(language === "zh" ? "已重新生成。" : "Regenerated.");
+        return;
+      }
       const backup = await api.backupFile({
         content: editorRef.current?.getValue() ?? currentContent,
         reason: "before_regenerate",
@@ -565,7 +729,7 @@ export default function App() {
       setStatus(language === "zh" ? "已重新生成。" : "Regenerated.");
       setConversation([...base, { role: "assistant", content }]);
     } catch (err: any) {
-      setStatus(`${t.regenerateFail}: ${err?.message ?? err}`);
+      setStatus(`${t.regenerateFail}: ${normalizeErrorMessage(err)}`);
     } finally {
       setIsBusy(false);
       setBusyAction(null);
@@ -623,7 +787,7 @@ export default function App() {
       setSelectionRange(null);
       setSelectionInstruction("");
     } catch (err: any) {
-      setStatus(`${t.rewriteFail}: ${err?.message ?? err}`);
+      setStatus(`${t.rewriteFail}: ${normalizeErrorMessage(err)}`);
     } finally {
       setIsBusy(false);
       setBusyAction(null);
@@ -645,7 +809,7 @@ export default function App() {
       });
       setTitleSuggestion(suggestion.trim());
     } catch (err: any) {
-      setStatus(`${t.generateFail}: ${err?.message ?? err}`);
+      setStatus(`${t.generateFail}: ${normalizeErrorMessage(err)}`);
     } finally {
       setIsBusy(false);
     }
@@ -666,7 +830,7 @@ export default function App() {
       });
       setOutlineSuggestion(suggestion.trim());
     } catch (err: any) {
-      setStatus(`${t.generateFail}: ${err?.message ?? err}`);
+      setStatus(`${t.generateFail}: ${normalizeErrorMessage(err)}`);
     } finally {
       setIsBusy(false);
     }
@@ -798,7 +962,8 @@ export default function App() {
     const cryptoObj = (globalThis as typeof globalThis & { crypto?: Crypto }).crypto;
     const id = cryptoObj?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     setProviderForm({ ...emptyProvider, id, apiType: "openai", authType: "bearer" });
-    setProviderType("");
+    setProviderType("openai");
+    applyProviderMode("openai");
     setModelOptions([]);
     setLastModelFetchKey("");
   }
@@ -806,13 +971,14 @@ export default function App() {
   function startEditProvider(provider: ProviderPublic) {
     setEditingProviderId(provider.id);
     setProviderForm({ ...provider, apiKey: "", apiType: provider.apiType ?? "openai", authType: provider.authType ?? "bearer" });
-    setProviderType("");
+    const mode = provider.apiType === "claude" || provider.apiType === "local" ? provider.apiType : "openai";
+    setProviderType(mode);
     setModelOptions([]);
     setLastModelFetchKey("");
   }
 
   async function fetchModels() {
-    if (!providerForm.baseUrl || !providerForm.apiKey) {
+    if (!providerForm.baseUrl || ((providerForm.apiType ?? "openai") !== "local" && !providerForm.apiKey)) {
       setStatus(t.needModelInfo);
       return;
     }
@@ -831,24 +997,63 @@ export default function App() {
       }
       setStatus(models.length > 0 ? t.modelsFetched : t.modelsEmpty);
     } catch (err: any) {
-      setStatus(`${t.modelFetchFail}: ${err?.message ?? err}`);
+      setStatus(`${t.modelFetchFail}: ${normalizeErrorMessage(err)}`);
     } finally {
       setModelLoading(false);
     }
   }
 
   async function saveProvider() {
-    if (!providerForm.name || !providerForm.baseUrl || !providerForm.model) {
-      setStatus(language === "zh" ? "供应商名称、Base URL、模型名称为必填项。" : "Provider name, base URL, and model are required.");
+    const mode = providerType || (providerForm.apiType ?? "openai");
+    const isLocal = mode === "local";
+    if (!providerForm.baseUrl || !providerForm.model || (!isLocal && !(providerForm.apiKey ?? "").trim())) {
+      setStatus(language === "zh" ? "Base URL、模型名称、API Key（本地模型除外）为必填项。" : "Base URL, model, and API key (except local) are required.");
       return;
     }
-    const saved = await api.saveProvider(providerForm);
+    const payload: ProviderConfig = {
+      ...providerForm,
+      name: (providerForm.name || "").trim() || getProviderModeLabel(mode),
+      apiType: mode as ProviderConfig["apiType"],
+      authType: "bearer",
+      apiKey: isLocal ? (providerForm.apiKey || "ollama") : providerForm.apiKey
+    };
+    const saved = await api.saveProvider(payload);
     const list = await api.listProviders();
     setProviders(list);
     setActiveProviderId(saved.id);
-    setProviderForm(emptyProvider);
+    const cryptoObj = (globalThis as typeof globalThis & { crypto?: Crypto }).crypto;
+    const id = cryptoObj?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    setProviderForm({ ...emptyProvider, id, apiType: "openai", authType: "bearer" });
+    setProviderType("openai");
     setEditingProviderId(null);
     setStatus(t.providerSaved);
+    if (!setupCompleted) {
+      await api.completeSetup({ mode: "provider" });
+      setSetupCompleted(true);
+    }
+  }
+
+  async function handleTestProvider() {
+    const mode = providerType || (providerForm.apiType ?? "openai");
+    const isLocal = mode === "local";
+    if (!providerForm.baseUrl || !providerForm.model || (!isLocal && !(providerForm.apiKey ?? "").trim())) {
+      setStatus(language === "zh" ? "请先填写 URL、Key（本地除外）和模型。" : "Fill URL, key (except local), and model first.");
+      return;
+    }
+    try {
+      setProviderTesting(true);
+      const res = await api.testProvider({
+        baseUrl: providerForm.baseUrl,
+        apiKey: isLocal ? (providerForm.apiKey || "ollama") : providerForm.apiKey,
+        model: providerForm.model,
+        apiType: mode as ProviderConfig["apiType"]
+      });
+      setStatus(res.ok ? t.testPassed : `${t.testFailed}: ${res.message}`);
+    } catch (err: any) {
+      setStatus(`${t.testFailed}: ${normalizeErrorMessage(err)}`);
+    } finally {
+      setProviderTesting(false);
+    }
   }
 
   async function deleteProvider(id: string) {
@@ -879,7 +1084,7 @@ export default function App() {
       if (!result) return;
       setStatus(`${t.providersExported} ${result.filePath}`);
     } catch (err: any) {
-      setStatus(`${language === "zh" ? "导出失败" : "Export failed"}: ${err?.message ?? err}`);
+      setStatus(`${language === "zh" ? "导出失败" : "Export failed"}: ${normalizeErrorMessage(err)}`);
     }
   }
 
@@ -902,8 +1107,45 @@ export default function App() {
       setActiveProviderId(active ?? list[0]?.id);
       setStatus(`${t.providersImported} (${result.importedCount})`);
     } catch (err: any) {
-      setStatus(`${language === "zh" ? "导入失败" : "Import failed"}: ${err?.message ?? err}`);
+      setStatus(`${language === "zh" ? "导入失败" : "Import failed"}: ${normalizeErrorMessage(err)}`);
     }
+  }
+
+  async function handleChooseProviderSetup() {
+    await api.completeSetup({ mode: "provider" });
+    setSetupCompleted(true);
+  }
+
+  async function handleInstallLocalSetup() {
+    try {
+      setInstallingLocalModel(true);
+      setStatus(t.onboardingInstalling);
+      const status = await api.installLocalModel();
+      setLocalModelStatus(status);
+      const list = await api.listProviders();
+      setProviders(list);
+      const active = await api.getActiveProvider();
+      setActiveProviderId(active ?? list[0]?.id);
+      await api.completeSetup({ mode: "local" });
+      setSetupCompleted(true);
+      setStatus(t.onboardingInstalled);
+    } catch (err: any) {
+      const raw = err?.message ?? String(err);
+      const normalized = raw.replace(/^Error invoking remote method '[^']+':\s*/i, "");
+      if (/ollama is not installed/i.test(normalized)) {
+        setStatus(t.onboardingOllamaMissing);
+      } else {
+        setStatus(normalized);
+      }
+      const status = await api.getLocalModelStatus();
+      setLocalModelStatus(status);
+    } finally {
+      setInstallingLocalModel(false);
+    }
+  }
+
+  async function handleInstallLocalAnytime() {
+    await handleInstallLocalSetup();
   }
 
   const selectedHistory = history.find((h) => h.id === selectedHistoryId);
@@ -941,6 +1183,343 @@ export default function App() {
     setDirty(true);
   }
 
+  function handlePreviewClick(event: React.MouseEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement | null;
+    const anchor = target?.closest("a") as HTMLAnchorElement | null;
+    if (!anchor?.href) return;
+    event.preventDefault();
+    api.openExternal(anchor.href).catch(() => undefined);
+  }
+
+  if (!setupReady) {
+    return <div className="setup-screen"><div className="setup-card">{t.onboardingChecking}</div></div>;
+  }
+
+  if (!setupCompleted) {
+    const ollamaMissing = localModelStatus && !localModelStatus.ollamaInstalled;
+    return (
+      <div className="setup-screen">
+        <div className="setup-card">
+          <img className="brand-logo" src={logoUrl} alt="Canvas Writer Logo" />
+          <h1>{t.onboardingTitle}</h1>
+          <p>{t.onboardingDesc}</p>
+          <div className="setup-actions">
+            <button className="btn" onClick={handleChooseProviderSetup}>{t.onboardingProvider}</button>
+            <button className="btn primary" onClick={handleInstallLocalSetup} disabled={installingLocalModel}>
+              {installingLocalModel ? t.onboardingInstalling : t.onboardingLocal}
+            </button>
+          </div>
+          {ollamaMissing && <div className="hint">{t.onboardingOllamaMissing}</div>}
+          {!ollamaMissing && localModelStatus?.modelInstalled && <div className="hint">{t.onboardingInstalled}</div>}
+          <div className="hint">{status}</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isMobileViewport) {
+    return (
+      <div className="mobile-app">
+        <header className="mobile-top">
+          <div className="mobile-brand">
+            <img className="brand-logo" src={logoUrl} alt="Canvas Writer Logo" />
+            <div className="mobile-brand-text">
+              <div className="brand-title">Canvas Writer</div>
+              <div className="brand-sub">{t.appSubtitle}</div>
+            </div>
+          </div>
+          <div className="theme-toggle" aria-label={t.theme}>
+            <button className={`theme-btn ${themeMode === "system" ? "active" : ""}`} onClick={() => setThemeMode("system")}>
+              {t.themeSystem}
+            </button>
+            <button className={`theme-btn ${themeMode === "light" ? "active" : ""}`} onClick={() => setThemeMode("light")}>
+              {t.themeLight}
+            </button>
+            <button className={`theme-btn ${themeMode === "dark" ? "active" : ""}`} onClick={() => setThemeMode("dark")}>
+              {t.themeDark}
+            </button>
+          </div>
+        </header>
+
+        <div className="mobile-tabs">
+          <button className={`btn ${mobilePane === "editor" ? "primary" : ""}`} onClick={() => setMobilePane("editor")}>
+            {t.tabEditor}
+          </button>
+          <button className={`btn ${mobilePane === "model" ? "primary" : ""}`} onClick={() => setMobilePane("model")}>
+            {t.tabModel}
+          </button>
+          <button className={`btn ${mobilePane === "history" ? "primary" : ""}`} onClick={() => setMobilePane("history")}>
+            {t.tabHistory}
+          </button>
+        </div>
+
+        <div className="mobile-status">{statusText}</div>
+
+        <div className="mobile-body">
+          {mobilePane === "model" && (
+            <section className="panel panel-provider mobile-panel">
+              <div className="panel-header">
+                <div className="panel-title">{t.providers}</div>
+                <button className="btn ghost" onClick={() => setProviderCollapsed((v) => !v)}>
+                  {providerCollapsed ? t.expand : t.collapse}
+                </button>
+              </div>
+              {!providerCollapsed && (
+                <>
+                  <select className="select" value={activeProviderId ?? ""} onChange={(e) => setActive(e.target.value)}>
+                    <option value="" disabled>{t.selectProvider}</option>
+                    {providers.map((p) => (
+                      <option key={p.id} value={p.id}>{displayProviderName(p)}</option>
+                    ))}
+                  </select>
+                  <div className="button-row">
+                    <button className="btn" onClick={startAddProvider}>{t.add}</button>
+                    {activeProvider && <button className="btn" onClick={() => startEditProvider(activeProvider)}>{t.edit}</button>}
+                    {activeProvider && <button className="btn danger" onClick={() => deleteProvider(activeProvider.id)}>{t.remove}</button>}
+                  </div>
+                  <div className="panel-title">{t.providerConfig}</div>
+                  <select
+                    className="select"
+                    value={providerType}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setProviderType(next);
+                      const preset = providerPresets.find((p) => p.id === next);
+                      if (preset) {
+                        setProviderForm((p) => ({
+                          ...p,
+                          name: p.name || preset.label,
+                          baseUrl: preset.baseUrl,
+                          apiType: (preset as any).apiType ?? p.apiType ?? "openai",
+                          authType: (preset as any).authType ?? p.authType ?? "bearer"
+                        }));
+                      }
+                    }}
+                  >
+                    <option value="">{t.providerType}</option>
+                    {providerPresets.map((p) => (
+                      <option key={p.id} value={p.id}>{p.label}</option>
+                    ))}
+                  </select>
+                  <input className="input" placeholder={t.providerName} value={providerForm.name} onChange={(e) => setProviderForm((p) => ({ ...p, name: e.target.value }))} />
+                  <select
+                    className="select"
+                    value={providerForm.apiType ?? "openai"}
+                    onChange={(e) => {
+                      const next = e.target.value as ProviderConfig["apiType"];
+                      setProviderForm((p) => ({ ...p, apiType: next, authType: next === "gemini" ? "x-goog-api-key" : "bearer" }));
+                    }}
+                  >
+                    <option value="local">Local (Ollama)</option>
+                    <option value="openai">{t.apiOpenAI}</option>
+                    <option value="minimax">{t.apiMiniMax}</option>
+                    <option value="gemini">{t.apiGemini}</option>
+                  </select>
+                  <input className="input" placeholder={t.baseUrl} value={providerForm.baseUrl} onChange={(e) => setProviderForm((p) => ({ ...p, baseUrl: e.target.value }))} />
+                  <select className="select" value={providerForm.authType ?? "bearer"} onChange={(e) => setProviderForm((p) => ({ ...p, authType: e.target.value as ProviderConfig["authType"] }))}>
+                    <option value="bearer">{t.authBearer}</option>
+                    <option value="x-api-key">{t.authX}</option>
+                    <option value="api-key">{t.authApiKey}</option>
+                    <option value="x-goog-api-key">{t.authGoog}</option>
+                  </select>
+                  <div className="button-row">
+                    <button className="btn" onClick={fetchModels} disabled={modelLoading}>{modelLoading ? t.fetching : t.fetchModels}</button>
+                  </div>
+                  <select className="select" value={providerForm.model} onChange={(e) => setProviderForm((p) => ({ ...p, model: e.target.value }))}>
+                    <option value="">{t.modelSelect}</option>
+                    {modelOptions.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                  <input className="input" placeholder={t.modelInput} value={providerForm.model} onChange={(e) => setProviderForm((p) => ({ ...p, model: e.target.value }))} />
+                  {(providerForm.apiType ?? "openai") !== "local" && (
+                    <input className="input" placeholder={editingProviderId ? t.apiKeyKeep : t.apiKey} value={providerForm.apiKey ?? ""} onChange={(e) => setProviderForm((p) => ({ ...p, apiKey: e.target.value }))} type="password" />
+                  )}
+                  <button className="btn primary" onClick={saveProvider}>{editingProviderId ? t.updateProvider : t.saveProvider}</button>
+                </>
+              )}
+              <div className="hint provider-current">{t.currentProvider}: {displayProviderName(activeProvider)}</div>
+              <input className="input" type="password" placeholder={t.providerPassphrase} value={providerPassphrase} onChange={(e) => setProviderPassphrase(e.target.value)} />
+              <div className="button-row">
+                <button className="btn" onClick={handleExportProviders}>{t.exportProviders}</button>
+                <button className="btn" onClick={handleImportProviders}>{t.importProviders}</button>
+              </div>
+            </section>
+          )}
+
+          {mobilePane === "history" && (
+            <div className="mobile-panel-stack">
+              <section className="panel panel-projects mobile-panel">
+                <div className="panel-title">{t.projects}</div>
+                <button className="btn" onClick={handleNewProject}>{t.newProject}</button>
+                <div className="history">
+                  {projects.map((p) => (
+                    <div key={p.id} className={`history-item ${currentProjectId === p.id ? "active" : ""}`} onClick={() => handleOpenProject(p.id)}>
+                      <div className="history-main">
+                        <div className="history-label">{p.title || "Untitled"}</div>
+                        <div className="history-time">{new Date(p.updatedAt).toLocaleString()}</div>
+                      </div>
+                      <span className="history-delete" role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); handleDeleteProject(p.id); }}>
+                        {t.remove}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+              <section className="panel panel-history mobile-panel">
+                <div className="panel-title">{t.history}</div>
+                <button className="btn" onClick={handleSnapshot}>{t.snapshot}</button>
+                <div className="history">
+                  {history.map((h) => (
+                    <button key={h.id} className={`history-item ${selectedHistoryId === h.id ? "active" : ""}`} onClick={() => setSelectedHistoryId(h.id)}>
+                      <div className="history-label">{h.label}</div>
+                      <div className="history-time">{h.createdAt}</div>
+                    </button>
+                  ))}
+                </div>
+                {selectedHistory && <button className="btn" onClick={() => handleRestoreHistory(selectedHistory.id)}>{t.restore}</button>}
+              </section>
+              <section className="panel mobile-panel">
+                <div className="panel-title">{t.diffTitle}</div>
+                <div className="diff">
+                  {diff.length === 0 && <div className="hint">{t.diffHint}</div>}
+                  {diff.map((part, idx) => (
+                    <span key={idx} className={part.added ? "diff-add" : part.removed ? "diff-remove" : "diff-same"}>
+                      {part.value}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            </div>
+          )}
+
+          {mobilePane === "editor" && (
+            <div className="mobile-editor-layout">
+              <section className="panel panel-dialog mobile-panel">
+                <div className="panel-title">{t.dialog}</div>
+                <div className="chat-body">
+                  <div className="chat-history">
+                    {conversation.length === 0 && <div className="hint">{language === "zh" ? "暂无对话记录。" : "No messages yet."}</div>}
+                    {conversation.map((m, idx) => (
+                      <div key={`${m.role}-${idx}`} className={`chat-item ${m.role}`}>
+                        <div className="chat-role">{m.role === "user" ? (language === "zh" ? "我" : "You") : "AI"}</div>
+                        <div className="chat-content">{m.content}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="chat-composer">
+                    <textarea className="textarea" placeholder={t.promptPlaceholder} value={chatInput} onChange={(e) => setChatInput(e.target.value)} />
+                    <div className="button-row">
+                      <select className="select" value={composeMode} onChange={(e) => setComposeMode(e.target.value as ComposeMode)}>
+                        <option value="direct">{t.composeDirect}</option>
+                        <option value="search">{t.composeSearch}</option>
+                      </select>
+                    </div>
+                    <div className="button-row">
+                      <label className="hint">{t.language}</label>
+                      <select className="select" value={language} onChange={(e) => setLanguage(e.target.value as Language)}>
+                        <option value="zh">{t.zh}</option>
+                        <option value="en">{t.en}</option>
+                      </select>
+                      <button className="btn" onClick={handleClearChat}>{t.clearChat}</button>
+                    </div>
+                    <div className="button-row">
+                      <button className="btn primary" onClick={handleGenerate} disabled={isBusy}>
+                        {isBusy ? (language === "zh" ? "处理中..." : "Working...") : t.generate}
+                      </button>
+                      <button className="btn" onClick={handleRegenerate} disabled={isBusy || !lastPrompt || (composeMode === "search" && !networkOnline)}>{t.regenerate}</button>
+                    </div>
+                    {composeMode === "search" && !networkOnline && <div className="hint">{t.searchUnavailableOffline}</div>}
+                    <div className={`network-corner ${networkOnline ? "online" : "offline"}`}>
+                      {language === "zh" ? (networkOnline ? "已联网" : "未联网") : (networkOnline ? "Online" : "Offline")}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="panel mobile-panel mobile-editor-panel">
+                <div className="button-row">
+                  <button className="btn" onClick={handleOpen}>{t.open}</button>
+                  <button className="btn" onClick={handleSave}>{t.save}</button>
+                  <button className="btn" onClick={handleExportDocx}>{t.exportDocx}</button>
+                </div>
+                <div className="button-row">
+                  <button className={`btn ${viewMode === "edit" ? "primary" : ""}`} onClick={() => setViewMode("edit")}>{t.editMode}</button>
+                  <button className={`btn ${viewMode === "preview" ? "primary" : ""}`} onClick={() => setViewMode("preview")}>{t.previewMode}</button>
+                  <button className={`btn ${cardMode ? "primary" : ""}`} onClick={() => setCardMode((v) => !v)}>{cardMode ? t.editView : t.cardView}</button>
+                </div>
+                <section className="editor-shell">
+                  <div className={`editor-wrap ${viewMode === "edit" && !cardMode ? "" : "hidden"}`}>
+                    <Editor
+                      ref={editorRef}
+                      initialValue=""
+                      onChange={setContent}
+                      onSelectionChange={(text, rect) => {
+                        if (text.trim().length === 0) {
+                          setSelectionText("");
+                          setSelectionRect(null);
+                          setSelectionRange(null);
+                          return;
+                        }
+                        setSelectionText(text);
+                        setSelectionRect(rect);
+                        const sel = editorRef.current?.getSelection();
+                        if (sel && sel.from !== sel.to) {
+                          setSelectionRange({ from: sel.from, to: sel.to });
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className={viewMode === "preview" && !cardMode ? "preview" : "preview hidden"} onClick={handlePreviewClick} dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                  {cardMode && (
+                    <div className="cards-view">
+                      {cards.length === 0 && <div className="hint">{language === "zh" ? "暂无内容。" : "No content."}</div>}
+                      {cards.map((card, idx) => (
+                        <div
+                          key={card.id}
+                          className="card-item"
+                          draggable
+                          onDragStart={() => setDragId(card.id)}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={() => {
+                            if (!dragId || dragId === card.id) return;
+                            const next = [...cards];
+                            const fromIdx = next.findIndex((c) => c.id === dragId);
+                            const toIdx = next.findIndex((c) => c.id === card.id);
+                            const [moved] = next.splice(fromIdx, 1);
+                            next.splice(toIdx, 0, moved);
+                            setCards(next);
+                            rebuildFromCards(next);
+                            setDragId(null);
+                          }}
+                        >
+                          <div className="card-index">{idx + 1}</div>
+                          <div className="card-text">{card.text}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </section>
+            </div>
+          )}
+        </div>
+
+        {!cardMode && viewMode === "edit" && selectionRange && mobilePane === "editor" && (
+          <div className="selection-popover mobile-selection-popover">
+            <div className="popover-title">{t.selectionTitle}</div>
+            <textarea className="textarea" placeholder={t.selectionPlaceholder} value={selectionInstruction} onChange={(e) => setSelectionInstruction(e.target.value)} />
+            <div className="button-row">
+              <button className="btn primary" onClick={() => handleRewriteSelection()} disabled={isBusy}>
+                {busyAction === "rewrite" ? `${language === "zh" ? "应用中" : "Applying"}${busyDots}` : t.apply}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className={`app ${mobileSidebarOpen ? "sidebar-open" : ""}`}>
       <aside className={`sidebar ${mobileSidebarOpen ? "open" : ""}`}>
@@ -975,7 +1554,7 @@ export default function App() {
                 </option>
                 {providers.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name}
+                    {displayProviderName(p)}
                   </option>
                 ))}
               </select>
@@ -995,48 +1574,12 @@ export default function App() {
                 className="select"
                 value={providerType}
                 onChange={(e) => {
-                  const next = e.target.value;
-                  setProviderType(next);
-                  const preset = providerPresets.find((p) => p.id === next);
-              if (preset) {
-                setProviderForm((p) => ({
-                  ...p,
-                  name: p.name || preset.label,
-                  baseUrl: preset.baseUrl,
-                  apiType: (preset as any).apiType ?? p.apiType ?? "openai",
-                  authType: (preset as any).authType ?? p.authType ?? "bearer"
-                }));
-              }
+                  applyProviderMode(e.target.value);
                 }}
               >
-                <option value="">{t.providerType}</option>
-                {providerPresets.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-              <input
-                className="input"
-                placeholder={t.providerName}
-                value={providerForm.name}
-                onChange={(e) => setProviderForm((p) => ({ ...p, name: e.target.value }))}
-              />
-              <select
-                className="select"
-                value={providerForm.apiType ?? "openai"}
-                onChange={(e) => {
-                  const next = e.target.value as ProviderConfig["apiType"];
-                  setProviderForm((p) => ({
-                    ...p,
-                    apiType: next,
-                    authType: next === "gemini" ? "x-goog-api-key" : "bearer"
-                  }));
-                }}
-              >
-                <option value="openai">{t.apiOpenAI}</option>
-                <option value="minimax">{t.apiMiniMax}</option>
-                <option value="gemini">{t.apiGemini}</option>
+                <option value="openai">{t.providerOpenAI}</option>
+                <option value="claude">{t.providerClaude}</option>
+                <option value="local">{t.providerLocal}</option>
               </select>
               <input
                 className="input"
@@ -1044,53 +1587,39 @@ export default function App() {
                 value={providerForm.baseUrl}
                 onChange={(e) => setProviderForm((p) => ({ ...p, baseUrl: e.target.value }))}
               />
-              <select
-                className="select"
-                value={providerForm.authType ?? "bearer"}
-                onChange={(e) => setProviderForm((p) => ({ ...p, authType: e.target.value as ProviderConfig["authType"] }))}
-              >
-                <option value="bearer">{t.authBearer}</option>
-                <option value="x-api-key">{t.authX}</option>
-                <option value="api-key">{t.authApiKey}</option>
-                <option value="x-goog-api-key">{t.authGoog}</option>
-              </select>
-              <div className="button-row">
-                <button className="btn" onClick={fetchModels} disabled={modelLoading}>
-                  {modelLoading ? t.fetching : t.fetchModels}
-                </button>
-              </div>
-              <select
-                className="select"
-                value={providerForm.model}
-                onChange={(e) => setProviderForm((p) => ({ ...p, model: e.target.value }))}
-              >
-                <option value="">{t.modelSelect}</option>
-                {modelOptions.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
+              <input
+                className="input"
+                placeholder={t.providerName}
+                value={providerForm.name}
+                onChange={(e) => setProviderForm((p) => ({ ...p, name: e.target.value }))}
+              />
+              {(providerType || (providerForm.apiType ?? "openai")) !== "local" && (
+                <input
+                  className="input"
+                  placeholder={editingProviderId ? t.apiKeyKeep : t.apiKey}
+                  value={providerForm.apiKey ?? ""}
+                  onChange={(e) => setProviderForm((p) => ({ ...p, apiKey: e.target.value }))}
+                  type="password"
+                />
+              )}
               <input
                 className="input"
                 placeholder={t.modelInput}
                 value={providerForm.model}
                 onChange={(e) => setProviderForm((p) => ({ ...p, model: e.target.value }))}
               />
-              <input
-                className="input"
-                placeholder={editingProviderId ? t.apiKeyKeep : t.apiKey}
-                value={providerForm.apiKey ?? ""}
-                onChange={(e) => setProviderForm((p) => ({ ...p, apiKey: e.target.value }))}
-                type="password"
-              />
-              <button className="btn primary" onClick={saveProvider}>
-                {editingProviderId ? t.updateProvider : t.saveProvider}
-              </button>
+              <div className="button-row">
+                <button className="btn" onClick={handleTestProvider} disabled={providerTesting}>
+                  {providerTesting ? t.fetching : t.testProvider}
+                </button>
+                <button className="btn primary" onClick={saveProvider}>
+                  {editingProviderId ? t.updateProvider : t.saveProvider}
+                </button>
+              </div>
             </>
           )}
           <div className="hint provider-current">
-            {t.currentProvider}: {activeProvider?.name ?? "—"}
+            {t.currentProvider}: {displayProviderName(activeProvider)}
           </div>
           <input
             className="input"
@@ -1099,6 +1628,11 @@ export default function App() {
             value={providerPassphrase}
             onChange={(e) => setProviderPassphrase(e.target.value)}
           />
+          <div className="button-row">
+            <button className="btn" onClick={handleInstallLocalAnytime} disabled={installingLocalModel}>
+              {installingLocalModel ? t.onboardingInstalling : t.installLocalAnytime}
+            </button>
+          </div>
           <div className="button-row">
             <button className="btn" onClick={handleExportProviders}>{t.exportProviders}</button>
             <button className="btn" onClick={handleImportProviders}>{t.importProviders}</button>
@@ -1185,6 +1719,12 @@ export default function App() {
             onChange={(e) => setChatInput(e.target.value)}
           />
           <div className="button-row">
+            <select className="select" value={composeMode} onChange={(e) => setComposeMode(e.target.value as ComposeMode)}>
+              <option value="direct">{t.composeDirect}</option>
+              <option value="search">{t.composeSearch}</option>
+            </select>
+          </div>
+          <div className="button-row">
             <label className="hint">{t.language}</label>
             <select
               className="select"
@@ -1200,12 +1740,16 @@ export default function App() {
             <button className="btn primary" onClick={handleGenerate} disabled={isBusy}>
               {isBusy ? (language === "zh" ? "处理中..." : "Working...") : t.generate}
             </button>
-            <button className="btn" onClick={handleRegenerate} disabled={isBusy || !lastPrompt}>
+            <button className="btn" onClick={handleRegenerate} disabled={isBusy || !lastPrompt || (composeMode === "search" && !networkOnline)}>
               {t.regenerate}
             </button>
           </div>
+          {composeMode === "search" && !networkOnline && <div className="hint">{t.searchUnavailableOffline}</div>}
           <div className="hint">
             {t.selectedChars}: {selectionText.length}
+          </div>
+          <div className={`network-corner ${networkOnline ? "online" : "offline"}`}>
+            {language === "zh" ? (networkOnline ? "已联网" : "未联网") : (networkOnline ? "Online" : "Offline")}
           </div>
           </div>
           </div>
@@ -1273,19 +1817,23 @@ export default function App() {
               initialValue=""
               onChange={setContent}
               onSelectionChange={(text, rect) => {
-                if (text.trim().length > 0 && rect) {
-                  setSelectionText(text);
-                  setSelectionRect(rect);
-                  const sel = editorRef.current?.getSelection();
-                  if (sel && sel.from !== sel.to) {
-                    setSelectionRange({ from: sel.from, to: sel.to });
-                  }
+                if (text.trim().length === 0) {
+                  setSelectionText("");
+                  setSelectionRect(null);
+                  setSelectionRange(null);
+                  return;
+                }
+                setSelectionText(text);
+                setSelectionRect(rect);
+                const sel = editorRef.current?.getSelection();
+                if (sel && sel.from !== sel.to) {
+                  setSelectionRange({ from: sel.from, to: sel.to });
                 }
               }}
             />
           </div>
 
-          <div className={viewMode === "preview" && !cardMode ? "preview" : "preview hidden"} dangerouslySetInnerHTML={{ __html: previewHtml }} />
+          <div className={viewMode === "preview" && !cardMode ? "preview" : "preview hidden"} onClick={handlePreviewClick} dangerouslySetInnerHTML={{ __html: previewHtml }} />
 
           {cardMode && (
             <div className="cards-view">

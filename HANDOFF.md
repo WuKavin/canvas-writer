@@ -1,6 +1,6 @@
 # Canvas Writer 交接文档
 
-最后更新时间：2026-02-12
+最后更新时间：2026-02-14
 
 ## 1. 项目概述
 Canvas Writer 是一款本地优先的多模型写作应用（Electron + React + Vite）。核心功能：
@@ -19,6 +19,12 @@ Canvas Writer 是一款本地优先的多模型写作应用（Electron + React +
 - 开发：`npm run dev`
 - 构建：`npm run build`
 - 打包（macOS）：`npm run dist`
+- 打包（Android APK）：`npm run mobile:apk`
+
+Android 构建前置：
+- JDK 21（本机使用：`/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`）
+- Android SDK（本机路径：`/Users/kavin/Library/Android/sdk`）
+- `android/local.properties` 需包含：`sdk.dir=/Users/kavin/Library/Android/sdk`
 
 ## 4. 供应商体系
 支持的 API 类型：
@@ -60,6 +66,11 @@ Web fallback（无 Electron API）：LocalStorage
 ## 9. 近期变更摘要（关键节点）
 - v0.1.6：深色背景对齐；历史项目 hover 删除
 - v0.1.7：供应商导入/导出（加密）；导入/导出密码输入框；按钮间距优化
+- Android（2026-02-14）：移动端 UI 按三页重做（编辑/模型/历史），新增顶部安全区防遮挡，保留系统/浅色/深色主题切换，图标替换为与 macOS 一致的 `logo.png`
+- Android（2026-02-14）：修复移动端编辑器选区判定，改为以真实 `selection range` 为准，避免依赖坐标导致触摸扩选失效；同时增强 CodeMirror 选区坐标容错
+
+## 13. Android 本地产物
+- Debug APK：`android/app/build/outputs/apk/debug/app-debug.apk`
 
 ## 10. 重要文件与目录
 - 入口：`src/renderer/App.tsx`

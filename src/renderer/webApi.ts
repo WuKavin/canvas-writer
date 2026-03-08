@@ -4,7 +4,7 @@ type ProviderConfig = {
   name: string;
   baseUrl: string;
   model: string;
-  apiType?: "openai" | "gemini" | "minimax";
+  apiType?: "openai" | "claude" | "gemini" | "minimax" | "local";
   authType?: "bearer" | "x-api-key" | "api-key" | "x-goog-api-key";
   apiKey?: string;
 };
@@ -84,7 +84,7 @@ function setProviders(next: ProviderConfig[]) {
 function getProvider(providerId: string): ProviderConfig {
   const provider = getProviders().find((p) => p.id === providerId);
   if (!provider) throw new Error("Provider not found");
-  if (!provider.apiKey) throw new Error("Missing API key for provider");
+  if (provider.apiType !== "local" && !provider.apiKey) throw new Error("Missing API key for provider");
   return provider;
 }
 
@@ -104,7 +104,7 @@ function buildRewriteContext(fullText: string, selectionText: string) {
 async function openaiCompatibleChat(provider: ProviderConfig, body: any) {
   const baseUrl = normalizeBaseUrl(provider.baseUrl);
   const url = `${baseUrl}/chat/completions`;
-  const authHeaders = buildAuthHeaders(provider.authType ?? "bearer", provider.apiKey || "");
+  const authHeaders = provider.apiType === "local" ? {} : buildAuthHeaders(provider.authType ?? "bearer", provider.apiKey || "");
   const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders },
@@ -174,6 +174,14 @@ function ensureWebApi() {
   if ((window as any).api) return;
 
   const api = {
+    getSetupStatus: async () => ({ completed: true, hasProviders: getProviders().length > 0 }),
+    completeSetup: async (_payload: { mode: "provider" | "local" }) => true,
+    getLocalModelStatus: async () => ({ ollamaInstalled: false, modelInstalled: false }),
+    installLocalModel: async () => {
+      throw new Error("Local model install is only available in desktop app");
+    },
+    getNetworkStatus: async () => ({ online: navigator.onLine }),
+
     openFile: () => pickTextFile(),
     saveFile: async (payload: { filePath?: string; content: string }) => {
       const filePath = payload.filePath || "canvas-writer.md";
@@ -196,6 +204,11 @@ function ensureWebApi() {
     },
     requestQuit: async () => {
       window.close();
+      return true;
+    },
+    openExternal: async (url: string) => {
+      if (!/^https?:\/\//i.test(url || "")) return false;
+      window.open(url, "_blank", "noopener,noreferrer");
       return true;
     },
     listProjects: async () => readJson<Project[]>(LS_PROJECTS, []),
@@ -244,6 +257,9 @@ function ensureWebApi() {
       }
       return true;
     },
+    testProvider: async (_payload: { baseUrl: string; apiKey?: string; model: string; apiType?: ProviderConfig["apiType"] }) => {
+      throw new Error("Provider test is only available in desktop app");
+    },
     exportProviders: async (_payload: { passphrase: string }) => {
       throw new Error("Provider export is only available in desktop app");
     },
@@ -251,6 +267,38 @@ function ensureWebApi() {
       throw new Error("Provider import is only available in desktop app");
     },
     fetchModels: async (payload: { baseUrl: string; apiKey: string; authType?: ProviderConfig["authType"]; apiType?: ProviderConfig["apiType"] }) => {
+      if (payload.apiType === "local") {
+        const baseUrl = normalizeBaseUrl(payload.baseUrl);
+        const url = `${baseUrl}/models`;
+        const res = await fetchWithTimeout(url, {
+          method: "GET",
+          headers: { "Content-Type": "application/json" }
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Local model list request failed: ${res.status} ${text}`);
+        }
+        const data = await res.json();
+        return Array.isArray(data?.data) ? data.data.map((m: any) => m?.id).filter((id: any) => typeof id === "string") : [];
+      }
+      if (payload.apiType === "claude") {
+        const baseUrl = normalizeBaseUrl(payload.baseUrl);
+        const url = `${baseUrl}/models`;
+        const res = await fetchWithTimeout(url, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": payload.apiKey,
+            "anthropic-version": "2023-06-01"
+          }
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Claude model list request failed: ${res.status} ${text}`);
+        }
+        const data = await res.json();
+        return Array.isArray(data?.data) ? data.data.map((m: any) => m?.id).filter((id: any) => typeof id === "string") : [];
+      }
       if (payload.apiType === "minimax") return ["MiniMax-M1", "MiniMax-Text-01", "MiniMax-M2.1"];
       if (payload.apiType === "gemini") {
         const baseUrl = normalizeBaseUrl(payload.baseUrl, "v1beta");
@@ -297,6 +345,9 @@ function ensureWebApi() {
         messages: [{ role: "system", content: system }, ...payload.messages],
         temperature: 0.7
       });
+    },
+    generateArticleWithSearch: async (_payload: { providerId: string; prompt: string; language: "zh" | "en" }) => {
+      throw new Error("Search-based writing is only available in desktop app");
     },
     assistArticle: async (payload: { providerId: string; purpose: "title" | "outline"; content: string; language: "zh" | "en" }) => {
       const provider = getProvider(payload.providerId);
